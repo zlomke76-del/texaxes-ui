@@ -62,6 +62,10 @@ type FilterKey =
   | "completed"
   | "no_show";
 
+const OPS_API_BASE =
+  process.env.NEXT_PUBLIC_TEXAXES_OPS_URL?.replace(/\/+$/, "") ||
+  "https://texaxes-ops.vercel.app";
+
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -103,6 +107,26 @@ function getStatusTone(status: string) {
   }
 }
 
+async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${OPS_API_BASE}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  const json = text ? JSON.parse(text) : {};
+
+  if (!res.ok) {
+    throw new Error(json?.error || `Request failed: ${res.status}`);
+  }
+
+  return json as T;
+}
+
 export default function StaffTodayPage() {
   const [data, setData] = useState<TodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,11 +139,7 @@ export default function StaffTodayPage() {
     try {
       setLoading(true);
       setError("");
-      const res = await fetch("/api/admin/bookings-today", {
-        cache: "no-store",
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Failed to load bookings");
+      const json = await opsFetch<TodayResponse>("/api/admin/bookings-today");
       setData(json);
     } catch (err: any) {
       setError(err?.message || "Failed to load bookings");
@@ -135,20 +155,25 @@ export default function StaffTodayPage() {
   const filteredBookings = useMemo(() => {
     const rows = data?.bookings || [];
     if (filter === "all") return rows;
+
     if (filter === "unpaid") {
       return rows.filter(
         (row) => row.payment_status !== "paid" && row.booking_status !== "completed"
       );
     }
+
     if (filter === "checked_in") {
       return rows.filter((row) => row.booking_status === "checked_in");
     }
+
     if (filter === "completed") {
       return rows.filter((row) => row.booking_status === "completed");
     }
+
     if (filter === "no_show") {
       return rows.filter((row) => row.booking_status === "no_show");
     }
+
     if (filter === "upcoming") {
       return rows.filter((row) =>
         ["pending", "awaiting_payment", "confirmed", "paid"].includes(
@@ -156,25 +181,24 @@ export default function StaffTodayPage() {
         )
       );
     }
+
     return rows;
   }, [data, filter]);
 
   async function applyUpdate(
     bookingId: string,
-    updates: Record<string, unknown>,
-    successMessage?: string
+    updates: Record<string, unknown>
   ) {
     try {
       setBusyId(bookingId);
-      const res = await fetch("/api/admin/update-booking", {
+      await opsFetch("/api/admin/update-booking", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking_id: bookingId, ...updates }),
+        body: JSON.stringify({
+          booking_id: bookingId,
+          ...updates,
+        }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Update failed");
       await loadBoard();
-      if (successMessage) console.log(successMessage);
     } catch (err: any) {
       alert(err?.message || "Update failed");
     } finally {
@@ -194,11 +218,13 @@ export default function StaffTodayPage() {
   async function handleEditPartySize(row: BookingRow) {
     const next = window.prompt("Update party size", String(row.party_size || 1));
     if (next === null) return;
+
     const size = Number(next);
     if (!Number.isInteger(size) || size <= 0) {
       alert("Invalid party size");
       return;
     }
+
     await applyUpdate(row.booking_id, { party_size: size });
   }
 
@@ -214,6 +240,9 @@ export default function StaffTodayPage() {
             <p className="mt-2 max-w-3xl text-sm text-white/70">
               Live front-desk board for today’s bookings, payment visibility, and
               quick operational adjustments.
+            </p>
+            <p className="mt-2 text-xs text-white/45">
+              Connected to: {OPS_API_BASE}
             </p>
           </div>
 
@@ -340,7 +369,10 @@ export default function StaffTodayPage() {
                         </div>
 
                         <div>
-                          <StatusPill label={row.payment_status} tone={getStatusTone(row.payment_status)} />
+                          <StatusPill
+                            label={row.payment_status}
+                            tone={getStatusTone(row.payment_status)}
+                          />
                           <div className="mt-2 text-sm text-white/75">
                             Due: {formatMoney(row.total_amount)}
                           </div>
@@ -350,8 +382,14 @@ export default function StaffTodayPage() {
                         </div>
 
                         <div className="flex flex-wrap gap-2">
-                          <StatusPill label={row.booking_status} tone={getStatusTone(row.booking_status)} />
-                          <StatusPill label={row.waiver_status} tone={getStatusTone(row.waiver_status)} />
+                          <StatusPill
+                            label={row.booking_status}
+                            tone={getStatusTone(row.booking_status)}
+                          />
+                          <StatusPill
+                            label={row.waiver_status}
+                            tone={getStatusTone(row.waiver_status)}
+                          />
                         </div>
 
                         <div className="flex flex-wrap gap-2">
