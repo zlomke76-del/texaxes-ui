@@ -16,7 +16,8 @@ type BookingStatus =
   | "unknown";
 
 type WaiverStatus =
-  | "signed"
+  | "complete"
+  | "partial"
   | "missing"
   | "guardian_required"
   | "expired"
@@ -38,6 +39,8 @@ type BookingRow = {
   booking_status: BookingStatus;
   payment_status: PaymentStatus;
   waiver_status: WaiverStatus;
+  waiver_required?: number;
+  waiver_signed?: number;
   waiver_url: string;
   total_amount: number;
   amount_paid: number;
@@ -60,6 +63,9 @@ type Summary = {
   completed_count: number;
   expected_revenue: number;
   collected_revenue: number;
+  waiver_complete_count?: number;
+  waiver_partial_count?: number;
+  waiver_missing_count?: number;
 };
 
 type TodayResponse = {
@@ -190,9 +196,14 @@ function shiftDate(dateString: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-function normalizeTaxExemptStatus(row: Pick<BookingRow, "tax_exempt" | "tax_exempt_status" | "internal_notes">): TaxExemptStatus | null {
+function normalizeTaxExemptStatus(
+  row: Pick<BookingRow, "tax_exempt" | "tax_exempt_status" | "internal_notes">
+): TaxExemptStatus | null {
   if (!row.tax_exempt) return null;
-  if (row.tax_exempt_status === "pending_form" || row.tax_exempt_status === "verified") {
+  if (
+    row.tax_exempt_status === "pending_form" ||
+    row.tax_exempt_status === "verified"
+  ) {
     return row.tax_exempt_status;
   }
 
@@ -216,12 +227,13 @@ function toneClass(status: string) {
     case "paid":
     case "checked_in":
     case "completed":
-    case "signed":
+    case "complete":
     case "verified":
       return styles.toneGood;
     case "pending":
     case "awaiting_payment":
     case "missing":
+    case "partial":
     case "guardian_required":
     case "confirmed":
     case "pending_form":
@@ -247,7 +259,7 @@ function isAttentionBooking(row: BookingRow) {
 
   return (
     row.payment_status !== "paid" ||
-    row.waiver_status !== "signed" ||
+    row.waiver_status !== "complete" ||
     row.booking_status === "awaiting_payment" ||
     taxStatus === "pending_form"
   );
@@ -258,7 +270,7 @@ function getPriorityScore(row: BookingRow) {
 
   if (row.booking_status === "awaiting_payment") return 0;
   if (row.payment_status !== "paid") return 1;
-  if (row.waiver_status !== "signed") return 2;
+  if (row.waiver_status !== "complete") return 2;
   if (taxStatus === "pending_form") return 3;
   if (row.booking_status === "checked_in") return 4;
   if (row.booking_status === "completed") return 6;
@@ -428,7 +440,15 @@ export default function StaffTodayPage() {
       outstanding,
       percentCollected,
       attentionCount: bookings.filter(isAttentionBooking).length,
-      missingWaivers: bookings.filter((row) => row.waiver_status !== "signed").length,
+      missingWaivers: bookings.reduce(
+        (sum, row) =>
+          sum +
+          Math.max(
+            0,
+            (row.waiver_required ?? row.party_size) - (row.waiver_signed ?? 0)
+          ),
+        0
+      ),
       unpaidCount: bookings.filter((row) => row.payment_status !== "paid").length,
       taxExemptCount: bookings.filter((row) => !!row.tax_exempt).length,
       taxFormsPending: bookings.filter(
@@ -532,9 +552,7 @@ export default function StaffTodayPage() {
     const collectLine = "Collect tax exempt form.";
     const verifiedLine = "Tax exempt form collected.";
 
-    const nextNotes = currentNotes
-      .replace(collectLine, verifiedLine)
-      .trim();
+    const nextNotes = currentNotes.replace(collectLine, verifiedLine).trim();
 
     await applyUpdate(row.booking_id, {
       tax_exempt_status: "verified",
@@ -625,10 +643,13 @@ export default function StaffTodayPage() {
           : null,
       };
 
-      const created = await opsFetch<CreateBookingResponse>("/api/admin/create-booking", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const created = await opsFetch<CreateBookingResponse>(
+        "/api/admin/create-booking",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        }
+      );
 
       setShowCreateModal(false);
       setCreateForm(defaultCreateForm());
@@ -701,7 +722,10 @@ export default function StaffTodayPage() {
                   Next →
                 </button>
 
-                <button onClick={() => loadBoard(selectedDate)} className={styles.secondaryButton}>
+                <button
+                  onClick={() => loadBoard(selectedDate)}
+                  className={styles.secondaryButton}
+                >
                   Refresh Board
                 </button>
 
@@ -878,6 +902,10 @@ export default function StaffTodayPage() {
 
                           <div>
                             <div className={styles.detailStrong}>Party of {row.party_size}</div>
+                            <div className={styles.detailMuted}>
+                              Waivers: {row.waiver_signed ?? 0} /{" "}
+                              {row.waiver_required ?? row.party_size}
+                            </div>
                             <div className={styles.detailMuted}>
                               {(row.booking_type || "open").replaceAll("_", " ")} ·{" "}
                               {(row.booking_source || "unknown").replaceAll("_", " ")}
@@ -1094,6 +1122,13 @@ export default function StaffTodayPage() {
                                     Waiver:{" "}
                                     <span className={styles.quickStrong}>
                                       {row.waiver_status.replaceAll("_", " ")}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Signed:{" "}
+                                    <span className={styles.quickStrong}>
+                                      {row.waiver_signed ?? 0} /{" "}
+                                      {row.waiver_required ?? row.party_size}
                                     </span>
                                   </div>
                                   <div>
@@ -1364,7 +1399,9 @@ export default function StaffTodayPage() {
                 {availabilityLoading ? (
                   <div className={styles.slotLoading}>Checking availability...</div>
                 ) : availability.length === 0 ? (
-                  <div className={styles.slotLoading}>No available slots found for this date.</div>
+                  <div className={styles.slotLoading}>
+                    No available slots found for this date.
+                  </div>
                 ) : (
                   availability.map((slot) => {
                     const selected = createForm.time === slot.start;
@@ -1471,7 +1508,11 @@ function StatusPill({
   label: string;
   className: string;
 }) {
-  return <span className={`${styles.pill} ${className}`}>{label.replaceAll("_", " ")}</span>;
+  return (
+    <span className={`${styles.pill} ${className}`}>
+      {label.replaceAll("_", " ")}
+    </span>
+  );
 }
 
 function DetailBox({ title, value }: { title: string; value: string }) {
