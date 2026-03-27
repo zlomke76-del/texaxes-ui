@@ -24,6 +24,15 @@ type WaiverStatus =
   | "unknown";
 
 type TaxExemptStatus = "pending_form" | "verified" | "unknown";
+type TabType = "booking" | "walk_in" | "spectator" | "retail_only";
+type TabStatus = "open" | "closed" | "void";
+type ItemType = "booking" | "drink" | "snack" | "retail" | "axe" | "custom";
+type TabPaymentMethod =
+  | "online_stripe"
+  | "in_store_terminal"
+  | "cash"
+  | "comp"
+  | "manual_adjustment";
 
 type BookingRow = {
   booking_id: string;
@@ -162,6 +171,136 @@ type CreateFormState = {
   tax_exempt_note: string;
 };
 
+type TabSummaryRow = {
+  id: string;
+  booking_id: string | null;
+  customer_id: string | null;
+  tab_type: TabType;
+  status: TabStatus;
+  party_name: string | null;
+  party_size: number;
+  notes: string | null;
+  subtotal: number;
+  tax_total: number;
+  grand_total: number;
+  amount_paid: number;
+  balance_due: number;
+  opened_at: string | null;
+  closed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  customer?: {
+    id?: string;
+    first_name?: string;
+    last_name?: string;
+    full_name?: string;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
+  booking?: {
+    id?: string;
+    booking_type?: string | null;
+    booking_source?: string | null;
+    status?: string | null;
+    party_size?: number | null;
+  } | null;
+};
+
+type ListOpenTabsResponse = {
+  success: boolean;
+  summary: {
+    count: number;
+    open_count: number;
+    total_balance_due: number;
+    total_grand_total: number;
+    total_amount_paid: number;
+  };
+  tabs: TabSummaryRow[];
+};
+
+type TabLineItem = {
+  id: string;
+  tab_id: string;
+  item_type: ItemType;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  taxable: boolean;
+  tax_rate: number;
+  tax_exempt_override: boolean;
+  tax_exempt_reason: string | null;
+  line_subtotal: number;
+  line_tax: number;
+  line_total: number;
+  note: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type TabPayment = {
+  id: string;
+  tab_id: string;
+  payment_method: TabPaymentMethod;
+  status: "pending" | "completed" | "void";
+  amount: number;
+  reference: string | null;
+  note: string | null;
+  collected_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type TabDetailResponse = {
+  success: boolean;
+  tab: {
+    id: string;
+    booking_id: string | null;
+    customer_id: string | null;
+    tab_type: TabType;
+    status: TabStatus;
+    party_name: string | null;
+    party_size: number;
+    notes: string | null;
+    subtotal: number;
+    tax_total: number;
+    grand_total: number;
+    amount_paid: number;
+    balance_due: number;
+    opened_at: string | null;
+    closed_at: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+    customers?: {
+      id?: string;
+      first_name?: string;
+      last_name?: string;
+      email?: string | null;
+      phone?: string | null;
+    } | null;
+    bookings?: {
+      id?: string;
+      booking_type?: string | null;
+      booking_source?: string | null;
+      status?: string | null;
+      party_size?: number | null;
+      total_amount?: number | null;
+      amount_paid?: number | null;
+      tax_exempt?: boolean | null;
+      tax_exempt_reason?: string | null;
+      tax_exempt_status?: string | null;
+      customer_notes?: string | null;
+      internal_notes?: string | null;
+    } | null;
+  };
+  line_items: TabLineItem[];
+  payments: TabPayment[];
+};
+
+type CreateTabResponse = {
+  success: boolean;
+  tab: TabSummaryRow;
+};
+
 const OPS_API_BASE =
   process.env.NEXT_PUBLIC_TEXAXES_OPS_URL?.replace(/\/+$/, "") ||
   "https://texaxes-ops.vercel.app";
@@ -176,10 +315,24 @@ function formatMoney(value: number) {
 }
 
 function formatTime(value: string) {
-  const [hour, minute] = String(value || "00:00:00").split(":").map(Number);
+  const [hour, minute] = String(value || "00:00:00")
+    .split(":")
+    .map(Number);
   const date = new Date();
   date.setHours(hour || 0, minute || 0, 0, 0);
   return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
@@ -229,6 +382,7 @@ function toneClass(status: string) {
     case "completed":
     case "complete":
     case "verified":
+    case "open":
       return styles.toneGood;
     case "pending":
     case "awaiting_payment":
@@ -362,6 +516,15 @@ export default function StaffTodayPage() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availability, setAvailability] = useState<AvailabilitySlot[]>([]);
 
+  const [tabBusyId, setTabBusyId] = useState<string | null>(null);
+  const [tabDetailsByBooking, setTabDetailsByBooking] = useState<
+    Record<string, TabDetailResponse | null>
+  >({});
+  const [openTabsSummary, setOpenTabsSummary] = useState<ListOpenTabsResponse | null>(
+    null
+  );
+  const [openTabsLoading, setOpenTabsLoading] = useState(false);
+
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 2500);
@@ -399,10 +562,28 @@ export default function StaffTodayPage() {
     }
   }
 
+  async function loadOpenTabs(status: TabStatus = "open") {
+    try {
+      setOpenTabsLoading(true);
+      const response = await opsFetch<ListOpenTabsResponse>(
+        `/api/admin/list-open-tabs?status=${encodeURIComponent(status)}`
+      );
+      setOpenTabsSummary(response);
+    } catch (err) {
+      console.error("Failed to load open tabs", err);
+    } finally {
+      setOpenTabsLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadBoard(selectedDate);
     setExpanded(null);
   }, [selectedDate]);
+
+  useEffect(() => {
+    loadOpenTabs("open");
+  }, []);
 
   useEffect(() => {
     if (!showCreateModal) return;
@@ -669,6 +850,348 @@ export default function StaffTodayPage() {
     }
   }
 
+  async function findOpenTabForBooking(bookingId: string) {
+    const response = await opsFetch<ListOpenTabsResponse>(
+      `/api/admin/list-open-tabs?status=open&search=${encodeURIComponent(bookingId)}`
+    );
+
+    return response.tabs.find((tab) => tab.booking_id === bookingId) || null;
+  }
+
+  async function loadTab(tabId: string, bookingIdForStore?: string) {
+    const detail = await opsFetch<TabDetailResponse>(
+      `/api/admin/get-tab?tab_id=${encodeURIComponent(tabId)}`
+    );
+
+    const bookingKey = bookingIdForStore || detail.tab.booking_id || detail.tab.id;
+
+    setTabDetailsByBooking((prev) => ({
+      ...prev,
+      [bookingKey]: detail,
+    }));
+
+    return detail;
+  }
+
+  async function ensureBookingTab(row: BookingRow) {
+    try {
+      setTabBusyId(row.booking_id);
+
+      let found = await findOpenTabForBooking(row.booking_id);
+
+      if (!found) {
+        const created = await opsFetch<CreateTabResponse>("/api/admin/create-tab", {
+          method: "POST",
+          body: JSON.stringify({
+            booking_id: row.booking_id,
+            customer_id: row.customer_id,
+            tab_type: "booking",
+            party_name: row.customer_name,
+            party_size: row.party_size,
+            notes: `Auto-created from booking ${row.booking_id}`,
+          }),
+        });
+
+        found = created.tab;
+      }
+
+      await loadTab(found.id, row.booking_id);
+      await loadOpenTabs("open");
+      setToast("Tab ready");
+    } catch (err: any) {
+      alert(err?.message || "Failed to open tab");
+    } finally {
+      setTabBusyId(null);
+    }
+  }
+
+  async function createStandaloneTab(tabType: Exclude<TabType, "booking">) {
+    const partyName = window.prompt("Party / tab name");
+    if (partyName === null) return;
+
+    const partySizeInput = window.prompt("Party size", "1");
+    if (partySizeInput === null) return;
+
+    const partySize = Math.max(1, Number(partySizeInput || 1));
+    if (!Number.isInteger(partySize) || partySize <= 0) {
+      alert("Invalid party size");
+      return;
+    }
+
+    try {
+      setTabBusyId(`new-${tabType}`);
+
+      const created = await opsFetch<CreateTabResponse>("/api/admin/create-tab", {
+        method: "POST",
+        body: JSON.stringify({
+          tab_type: tabType,
+          party_name: partyName.trim() || null,
+          party_size: partySize,
+        }),
+      });
+
+      await loadOpenTabs("open");
+      setToast(`${formatLabel(tabType)} tab created`);
+
+      const detail = await loadTab(created.tab.id, created.tab.id);
+      setExpanded(created.tab.id);
+      setTabDetailsByBooking((prev) => ({
+        ...prev,
+        [created.tab.id]: detail,
+      }));
+    } catch (err: any) {
+      alert(err?.message || "Failed to create tab");
+    } finally {
+      setTabBusyId(null);
+    }
+  }
+
+  async function refreshExistingTab(bookingKey: string) {
+    const detail = tabDetailsByBooking[bookingKey];
+    if (!detail?.tab?.id) return;
+
+    try {
+      setTabBusyId(bookingKey);
+      await loadTab(detail.tab.id, bookingKey);
+      await loadOpenTabs("open");
+    } catch (err: any) {
+      alert(err?.message || "Failed to refresh tab");
+    } finally {
+      setTabBusyId(null);
+    }
+  }
+
+  async function addItemPrompt(
+    bookingKey: string,
+    defaults?: Partial<{
+      item_type: ItemType;
+      description: string;
+      quantity: number;
+      unit_price: number;
+      taxable: boolean;
+      tax_exempt_override: boolean;
+    }>
+  ) {
+    const detail = tabDetailsByBooking[bookingKey];
+    if (!detail?.tab?.id) return;
+
+    const itemTypeInput = window.prompt(
+      "Item type (booking, drink, snack, retail, axe, custom)",
+      defaults?.item_type || "custom"
+    );
+    if (itemTypeInput === null) return;
+    const itemType = itemTypeInput.trim() as ItemType;
+
+    const description = window.prompt("Description", defaults?.description || "");
+    if (description === null || !description.trim()) return;
+
+    const quantityInput = window.prompt(
+      "Quantity",
+      String(defaults?.quantity ?? 1)
+    );
+    if (quantityInput === null) return;
+    const quantity = Number(quantityInput);
+
+    const unitPriceInput = window.prompt(
+      "Unit price",
+      String(defaults?.unit_price ?? 0)
+    );
+    if (unitPriceInput === null) return;
+    const unitPrice = Number(unitPriceInput);
+
+    const taxableResponse = window.prompt(
+      "Taxable? yes / no",
+      (defaults?.taxable ?? true) ? "yes" : "no"
+    );
+    if (taxableResponse === null) return;
+    const taxable = taxableResponse.trim().toLowerCase() !== "no";
+
+    const taxExemptOverrideResponse = window.prompt(
+      "Tax exempt override for this line? yes / no",
+      (defaults?.tax_exempt_override ?? false) ? "yes" : "no"
+    );
+    if (taxExemptOverrideResponse === null) return;
+    const taxExemptOverride =
+      taxExemptOverrideResponse.trim().toLowerCase() === "yes";
+
+    let taxExemptReason: string | null = null;
+    if (taxExemptOverride) {
+      const reason = window.prompt("Tax exempt reason for this item", "manual override");
+      if (reason === null) return;
+      taxExemptReason = reason.trim() || "manual override";
+    }
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      alert("Invalid quantity");
+      return;
+    }
+
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      alert("Invalid unit price");
+      return;
+    }
+
+    try {
+      setTabBusyId(bookingKey);
+
+      await opsFetch("/api/admin/add-line-item", {
+        method: "POST",
+        body: JSON.stringify({
+          tab_id: detail.tab.id,
+          item_type: itemType,
+          description: description.trim(),
+          quantity,
+          unit_price: unitPrice,
+          taxable,
+          tax_exempt_override: taxExemptOverride,
+          tax_exempt_reason: taxExemptReason,
+        }),
+      });
+
+      await refreshExistingTab(bookingKey);
+      setToast("Line item added");
+    } catch (err: any) {
+      alert(err?.message || "Failed to add line item");
+    } finally {
+      setTabBusyId(null);
+    }
+  }
+
+  async function recordPaymentPrompt(bookingKey: string) {
+    const detail = tabDetailsByBooking[bookingKey];
+    if (!detail?.tab?.id) return;
+
+    const amountInput = window.prompt(
+      "Payment amount",
+      String(detail.tab.balance_due || 0)
+    );
+    if (amountInput === null) return;
+    const amount = Number(amountInput);
+
+    if (!Number.isFinite(amount) || amount < 0) {
+      alert("Invalid amount");
+      return;
+    }
+
+    const paymentMethodInput = window.prompt(
+      "Payment method (online_stripe, in_store_terminal, cash, comp, manual_adjustment)",
+      "in_store_terminal"
+    );
+    if (paymentMethodInput === null) return;
+    const paymentMethod = paymentMethodInput.trim() as TabPaymentMethod;
+
+    const reference = window.prompt("Reference / receipt / last4 (optional)", "") ?? "";
+    const note = window.prompt("Payment note (optional)", "") ?? "";
+    const collectedBy = window.prompt("Collected by (optional)", "") ?? "";
+
+    try {
+      setTabBusyId(bookingKey);
+
+      await opsFetch("/api/admin/add-payment", {
+        method: "POST",
+        body: JSON.stringify({
+          tab_id: detail.tab.id,
+          amount,
+          payment_method: paymentMethod,
+          reference: reference.trim() || null,
+          note: note.trim() || null,
+          collected_by: collectedBy.trim() || null,
+        }),
+      });
+
+      await refreshExistingTab(bookingKey);
+      setToast("Payment recorded");
+    } catch (err: any) {
+      alert(err?.message || "Failed to record payment");
+    } finally {
+      setTabBusyId(null);
+    }
+  }
+
+  async function updateTabStatusPrompt(bookingKey: string, status: TabStatus) {
+    const detail = tabDetailsByBooking[bookingKey];
+    if (!detail?.tab?.id) return;
+
+    const note = window.prompt(
+      `Optional note for ${status} tab`,
+      status === "closed" ? "Closed at front desk" : ""
+    );
+    if (note === null) return;
+
+    try {
+      setTabBusyId(bookingKey);
+
+      await opsFetch("/api/admin/update-tab-status", {
+        method: "POST",
+        body: JSON.stringify({
+          tab_id: detail.tab.id,
+          status,
+          note: note.trim() || null,
+        }),
+      });
+
+      await refreshExistingTab(bookingKey);
+      await loadOpenTabs("open");
+      setToast(`Tab ${status}`);
+    } catch (err: any) {
+      alert(err?.message || "Failed to update tab status");
+    } finally {
+      setTabBusyId(null);
+    }
+  }
+
+  async function voidLineItem(bookingKey: string, lineItemId: string) {
+    const confirmed = window.confirm("Void this line item?");
+    if (!confirmed) return;
+
+    const note = window.prompt("Reason for void (optional)", "") ?? "";
+
+    try {
+      setTabBusyId(bookingKey);
+
+      await opsFetch("/api/admin/void-line-item", {
+        method: "POST",
+        body: JSON.stringify({
+          line_item_id: lineItemId,
+          note: note.trim() || null,
+        }),
+      });
+
+      await refreshExistingTab(bookingKey);
+      setToast("Line item voided");
+    } catch (err: any) {
+      alert(err?.message || "Failed to void line item");
+    } finally {
+      setTabBusyId(null);
+    }
+  }
+
+  async function voidPayment(bookingKey: string, paymentId: string) {
+    const confirmed = window.confirm("Void this payment?");
+    if (!confirmed) return;
+
+    const note = window.prompt("Reason for void (optional)", "") ?? "";
+
+    try {
+      setTabBusyId(bookingKey);
+
+      await opsFetch("/api/admin/void-payment", {
+        method: "POST",
+        body: JSON.stringify({
+          payment_id: paymentId,
+          note: note.trim() || null,
+        }),
+      });
+
+      await refreshExistingTab(bookingKey);
+      setToast("Payment voided");
+    } catch (err: any) {
+      alert(err?.message || "Failed to void payment");
+    } finally {
+      setTabBusyId(null);
+    }
+  }
+
   return (
     <>
       <main className={styles.page}>
@@ -682,13 +1205,20 @@ export default function StaffTodayPage() {
                 <h1 className={styles.title}>Operations Board</h1>
                 <p className={styles.subtitle}>
                   Live front-desk command surface for today, tomorrow, and future
-                  bookings. Staff can review, adjust, create bookings, and drive
-                  waiver completion directly.
+                  bookings. Staff can review, adjust, create bookings, drive waiver
+                  completion, and manage live tabs and payments.
                 </p>
                 <div className={styles.metaRow}>
                   <span className={styles.metaPill}>Connected: {OPS_API_BASE}</span>
                   <span className={styles.metaPill}>
                     Selected Date: {data?.date || selectedDate}
+                  </span>
+                  <span className={styles.metaPill}>
+                    Open tabs: {openTabsSummary?.summary.open_count ?? "—"}
+                  </span>
+                  <span className={styles.metaPill}>
+                    Open tab balance:{" "}
+                    {formatMoney(openTabsSummary?.summary.total_balance_due ?? 0)}
                   </span>
                 </div>
               </div>
@@ -731,6 +1261,22 @@ export default function StaffTodayPage() {
 
                 <button onClick={openCreateModal} className={styles.primaryButton}>
                   + New Booking
+                </button>
+
+                <button
+                  onClick={() => createStandaloneTab("walk_in")}
+                  disabled={tabBusyId === "new-walk_in"}
+                  className={styles.secondaryButton}
+                >
+                  + Walk-In Tab
+                </button>
+
+                <button
+                  onClick={() => createStandaloneTab("spectator")}
+                  disabled={tabBusyId === "new-spectator"}
+                  className={styles.secondaryButton}
+                >
+                  + Spectator Tab
                 </button>
               </div>
             </div>
@@ -827,7 +1373,9 @@ export default function StaffTodayPage() {
                   filteredBookings.map((row) => {
                     const isExpanded = expanded === row.booking_id;
                     const busy = busyId === row.booking_id;
+                    const tabBusy = tabBusyId === row.booking_id;
                     const taxStatus = normalizeTaxExemptStatus(row);
+                    const bookingTab = tabDetailsByBooking[row.booking_id];
 
                     const boardDate = data?.date || selectedDate;
                     const now = new Date();
@@ -919,6 +1467,12 @@ export default function StaffTodayPage() {
                                 Tax reason: {formatLabel(row.tax_exempt_reason)}
                               </div>
                             ) : null}
+                            {bookingTab ? (
+                              <div className={styles.detailMuted}>
+                                Tab: {formatMoney(bookingTab.tab.grand_total)} · Balance{" "}
+                                {formatMoney(bookingTab.tab.balance_due)}
+                              </div>
+                            ) : null}
                           </div>
 
                           <div>
@@ -966,6 +1520,12 @@ export default function StaffTodayPage() {
                                     : "form_verified"
                                 }
                                 className={toneClass(taxStatus)}
+                              />
+                            ) : null}
+                            {bookingTab ? (
+                              <StatusPill
+                                label={`tab_${bookingTab.tab.status}`}
+                                className={toneClass(bookingTab.tab.status)}
                               />
                             ) : null}
                           </div>
@@ -1063,6 +1623,14 @@ export default function StaffTodayPage() {
                                 className={styles.secondaryButton}
                               >
                                 Copy Link
+                              </button>
+                              <button
+                                type="button"
+                                disabled={tabBusy}
+                                onClick={() => ensureBookingTab(row)}
+                                className={styles.primaryButton}
+                              >
+                                {bookingTab ? "Refresh Tab" : "Open Tab"}
                               </button>
                               {row.tax_exempt && taxStatus === "pending_form" ? (
                                 <button
@@ -1173,6 +1741,13 @@ export default function StaffTodayPage() {
                                   >
                                     Edit Notes
                                   </button>
+                                  <button
+                                    onClick={() => ensureBookingTab(row)}
+                                    disabled={tabBusy}
+                                    className={styles.primaryButton}
+                                  >
+                                    {bookingTab ? "Refresh Tab" : "Open Tab"}
+                                  </button>
                                   {row.tax_exempt && taxStatus === "pending_form" ? (
                                     <button
                                       onClick={() => handleMarkTaxFormCollected(row)}
@@ -1184,11 +1759,397 @@ export default function StaffTodayPage() {
                                 </div>
                               </div>
                             </div>
+
+                            {bookingTab ? (
+                              <div className={styles.tabPanel}>
+                                <div className={styles.tabHeader}>
+                                  <div>
+                                    <div className={styles.detailTitle}>Live Tab / Invoice</div>
+                                    <div className={styles.tabTitleRow}>
+                                      <h3 className={styles.tabTitle}>
+                                        {bookingTab.tab.party_name || row.customer_name || "Open Tab"}
+                                      </h3>
+                                      <div className={styles.statusGroup}>
+                                        <StatusPill
+                                          label={bookingTab.tab.tab_type}
+                                          className={styles.toneNeutral}
+                                        />
+                                        <StatusPill
+                                          label={bookingTab.tab.status}
+                                          className={toneClass(bookingTab.tab.status)}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className={styles.tabMeta}>
+                                      Opened {formatDateTime(bookingTab.tab.opened_at)} · Tab ID{" "}
+                                      <span className={styles.codeText}>{bookingTab.tab.id}</span>
+                                    </div>
+                                  </div>
+
+                                  <div className={styles.tabActions}>
+                                    <button
+                                      className={styles.secondaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() => refreshExistingTab(row.booking_id)}
+                                    >
+                                      Refresh Tab
+                                    </button>
+                                    <button
+                                      className={styles.secondaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        addItemPrompt(row.booking_id, {
+                                          item_type: "drink",
+                                          description: "Coke",
+                                          quantity: 1,
+                                          unit_price: 3.5,
+                                          taxable: true,
+                                        })
+                                      }
+                                    >
+                                      + Coke
+                                    </button>
+                                    <button
+                                      className={styles.secondaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        addItemPrompt(row.booking_id, {
+                                          item_type: "drink",
+                                          description: "Water",
+                                          quantity: 1,
+                                          unit_price: 3.0,
+                                          taxable: false,
+                                        })
+                                      }
+                                    >
+                                      + Water
+                                    </button>
+                                    <button
+                                      className={styles.secondaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        addItemPrompt(row.booking_id, {
+                                          item_type: "axe",
+                                          description: "Retail Axe",
+                                          quantity: 1,
+                                          unit_price: 125,
+                                          taxable: true,
+                                        })
+                                      }
+                                    >
+                                      + Axe
+                                    </button>
+                                    <button
+                                      className={styles.primaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() => addItemPrompt(row.booking_id)}
+                                    >
+                                      + Custom Item
+                                    </button>
+                                    <button
+                                      className={styles.successButton}
+                                      disabled={tabBusy}
+                                      onClick={() => recordPaymentPrompt(row.booking_id)}
+                                    >
+                                      Record Payment
+                                    </button>
+                                    <button
+                                      className={styles.infoButton}
+                                      disabled={tabBusy || bookingTab.tab.status !== "open"}
+                                      onClick={() =>
+                                        updateTabStatusPrompt(row.booking_id, "closed")
+                                      }
+                                    >
+                                      Close Tab
+                                    </button>
+                                    <button
+                                      className={styles.dangerButton}
+                                      disabled={tabBusy || bookingTab.tab.status === "void"}
+                                      onClick={() =>
+                                        updateTabStatusPrompt(row.booking_id, "void")
+                                      }
+                                    >
+                                      Void Tab
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className={styles.tabSummaryGrid}>
+                                  <div className={styles.tabMetricCard}>
+                                    <div className={styles.statLabel}>Subtotal</div>
+                                    <div className={styles.tabMetricValue}>
+                                      {formatMoney(bookingTab.tab.subtotal)}
+                                    </div>
+                                  </div>
+                                  <div className={styles.tabMetricCard}>
+                                    <div className={styles.statLabel}>Tax</div>
+                                    <div className={styles.tabMetricValue}>
+                                      {formatMoney(bookingTab.tab.tax_total)}
+                                    </div>
+                                  </div>
+                                  <div className={styles.tabMetricCard}>
+                                    <div className={styles.statLabel}>Grand Total</div>
+                                    <div className={styles.tabMetricValue}>
+                                      {formatMoney(bookingTab.tab.grand_total)}
+                                    </div>
+                                  </div>
+                                  <div className={styles.tabMetricCard}>
+                                    <div className={styles.statLabel}>Paid</div>
+                                    <div className={styles.tabMetricValue}>
+                                      {formatMoney(bookingTab.tab.amount_paid)}
+                                    </div>
+                                  </div>
+                                  <div className={styles.tabMetricCard}>
+                                    <div className={styles.statLabel}>Balance Due</div>
+                                    <div className={styles.tabMetricValue}>
+                                      {formatMoney(bookingTab.tab.balance_due)}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className={styles.tabBodyGrid}>
+                                  <div className={styles.tabTableCard}>
+                                    <div className={styles.detailTitle}>Line Items</div>
+                                    {bookingTab.line_items.length === 0 ? (
+                                      <div className={styles.emptyMini}>
+                                        No line items on this tab yet.
+                                      </div>
+                                    ) : (
+                                      <div className={styles.tabTable}>
+                                        <div className={styles.tabTableHead}>
+                                          <div>Item</div>
+                                          <div>Qty</div>
+                                          <div>Tax</div>
+                                          <div>Total</div>
+                                          <div>Action</div>
+                                        </div>
+                                        {bookingTab.line_items.map((item) => {
+                                          const isVoided =
+                                            (item.note || "").includes("[VOID LINE ITEM]") ||
+                                            item.line_total === 0;
+                                          return (
+                                            <div
+                                              key={item.id}
+                                              className={`${styles.tabTableRow} ${
+                                                isVoided ? styles.tabRowVoided : ""
+                                              }`}
+                                            >
+                                              <div>
+                                                <div className={styles.tabItemName}>
+                                                  {item.description}
+                                                </div>
+                                                <div className={styles.tabItemMeta}>
+                                                  {formatLabel(item.item_type)} ·{" "}
+                                                  {item.tax_exempt_override
+                                                    ? "tax exempt override"
+                                                    : item.taxable
+                                                    ? "taxable"
+                                                    : "non-taxable"}
+                                                </div>
+                                              </div>
+                                              <div>{item.quantity}</div>
+                                              <div>{formatMoney(item.line_tax)}</div>
+                                              <div>{formatMoney(item.line_total)}</div>
+                                              <div>
+                                                <button
+                                                  className={styles.ghostButton}
+                                                  disabled={tabBusy || isVoided}
+                                                  onClick={() =>
+                                                    voidLineItem(row.booking_id, item.id)
+                                                  }
+                                                >
+                                                  Void
+                                                </button>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className={styles.tabTableCard}>
+                                    <div className={styles.detailTitle}>Payments</div>
+                                    {bookingTab.payments.length === 0 ? (
+                                      <div className={styles.emptyMini}>
+                                        No payments recorded on this tab yet.
+                                      </div>
+                                    ) : (
+                                      <div className={styles.tabTable}>
+                                        <div className={styles.tabTableHead}>
+                                          <div>Method</div>
+                                          <div>Amount</div>
+                                          <div>Status</div>
+                                          <div>When</div>
+                                          <div>Action</div>
+                                        </div>
+                                        {bookingTab.payments.map((payment) => (
+                                          <div
+                                            key={payment.id}
+                                            className={`${styles.tabTableRow} ${
+                                              payment.status === "void"
+                                                ? styles.tabRowVoided
+                                                : ""
+                                            }`}
+                                          >
+                                            <div>
+                                              <div className={styles.tabItemName}>
+                                                {formatLabel(payment.payment_method)}
+                                              </div>
+                                              <div className={styles.tabItemMeta}>
+                                                {payment.reference || payment.note || "—"}
+                                              </div>
+                                            </div>
+                                            <div>{formatMoney(payment.amount)}</div>
+                                            <div>
+                                              <StatusPill
+                                                label={payment.status}
+                                                className={toneClass(payment.status)}
+                                              />
+                                            </div>
+                                            <div>{formatDateTime(payment.created_at)}</div>
+                                            <div>
+                                              <button
+                                                className={styles.ghostButton}
+                                                disabled={tabBusy || payment.status === "void"}
+                                                onClick={() =>
+                                                  voidPayment(row.booking_id, payment.id)
+                                                }
+                                              >
+                                                Void
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className={styles.tabPanelPlaceholder}>
+                                <div className={styles.detailTitle}>Tab / Invoice</div>
+                                <p className={styles.emptyText}>
+                                  Open a tab to add drinks, retail, custom charges, and
+                                  in-store payments against this booking.
+                                </p>
+                                <button
+                                  className={styles.primaryButton}
+                                  disabled={tabBusy}
+                                  onClick={() => ensureBookingTab(row)}
+                                >
+                                  Open Tab
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ) : null}
                       </div>
                     );
                   })
+                )}
+              </section>
+
+              <section className={styles.openTabsPanel}>
+                <div className={styles.openTabsHeader}>
+                  <div>
+                    <div className={styles.detailTitle}>Open Tabs Snapshot</div>
+                    <h2 className={styles.openTabsTitle}>Floor Commerce</h2>
+                  </div>
+                  <div className={styles.openTabsActions}>
+                    <button
+                      className={styles.secondaryButton}
+                      onClick={() => loadOpenTabs("open")}
+                      disabled={openTabsLoading}
+                    >
+                      Refresh Open Tabs
+                    </button>
+                  </div>
+                </div>
+
+                {openTabsLoading ? (
+                  <div className={styles.messageCard}>Loading open tabs...</div>
+                ) : !openTabsSummary || openTabsSummary.tabs.length === 0 ? (
+                  <div className={styles.emptyMini}>No open tabs right now.</div>
+                ) : (
+                  <>
+                    <div className={styles.openTabsStats}>
+                      <div className={styles.tabMetricCard}>
+                        <div className={styles.statLabel}>Open Tabs</div>
+                        <div className={styles.tabMetricValue}>
+                          {openTabsSummary.summary.open_count}
+                        </div>
+                      </div>
+                      <div className={styles.tabMetricCard}>
+                        <div className={styles.statLabel}>Open Tab Total</div>
+                        <div className={styles.tabMetricValue}>
+                          {formatMoney(openTabsSummary.summary.total_grand_total)}
+                        </div>
+                      </div>
+                      <div className={styles.tabMetricCard}>
+                        <div className={styles.statLabel}>Collected</div>
+                        <div className={styles.tabMetricValue}>
+                          {formatMoney(openTabsSummary.summary.total_amount_paid)}
+                        </div>
+                      </div>
+                      <div className={styles.tabMetricCard}>
+                        <div className={styles.statLabel}>Balance Due</div>
+                        <div className={styles.tabMetricValue}>
+                          {formatMoney(openTabsSummary.summary.total_balance_due)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={styles.openTabsList}>
+                      {openTabsSummary.tabs.map((tab) => (
+                        <div key={tab.id} className={styles.openTabCard}>
+                          <div className={styles.openTabTop}>
+                            <div>
+                              <div className={styles.customerName}>
+                                {tab.party_name ||
+                                  tab.customer?.full_name ||
+                                  `${formatLabel(tab.tab_type)} tab`}
+                              </div>
+                              <div className={styles.detailMuted}>
+                                {formatLabel(tab.tab_type)} · party of {tab.party_size}
+                              </div>
+                              <div className={styles.detailMuted}>
+                                Opened {formatDateTime(tab.opened_at)}
+                              </div>
+                            </div>
+                            <div className={styles.statusGroup}>
+                              <StatusPill
+                                label={tab.status}
+                                className={toneClass(tab.status)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className={styles.openTabMetrics}>
+                            <span className={styles.attentionPill}>
+                              Total {formatMoney(tab.grand_total)}
+                            </span>
+                            <span className={styles.attentionPill}>
+                              Paid {formatMoney(tab.amount_paid)}
+                            </span>
+                            <span className={styles.attentionPill}>
+                              Balance {formatMoney(tab.balance_due)}
+                            </span>
+                          </div>
+
+                          <div className={styles.openTabMeta}>
+                            {tab.booking_id ? (
+                              <span className={styles.codeText}>
+                                Booking: {tab.booking_id}
+                              </span>
+                            ) : (
+                              <span className={styles.codeText}>Standalone tab</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </section>
             </>
