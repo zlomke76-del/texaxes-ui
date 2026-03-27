@@ -284,10 +284,6 @@ type TabDetailResponse = {
       status?: string | null;
       party_size?: number | null;
       total_amount?: number | null;
-      amount_paid?: number | null;
-      tax_exempt?: boolean | null;
-      tax_exempt_reason?: string | null;
-      tax_exempt_status?: string | null;
       customer_notes?: string | null;
       internal_notes?: string | null;
     } | null;
@@ -1915,237 +1911,248 @@ export default function StaffTodayPage() {
                             </div>
 
                             {bookingTab ? (
-  <div className={styles.tabPanel}>
-    <div className={styles.tabHeader}>
-      <div>
-        <div className={styles.detailTitle}>Live Tab / Invoice</div>
-        <div className={styles.tabTitleRow}>
-          <h3 className={styles.tabTitle}>
-            {bookingTab.tab.party_name || row.customer_name || "Open Tab"}
-          </h3>
-          <div className={styles.statusGroup}>
-            <StatusPill
-              label={bookingTab.tab.tab_type}
-              className={styles.toneNeutral}
-            />
-            <StatusPill
-              label={bookingTab.tab.status}
-              className={toneClass(bookingTab.tab.status)}
-            />
-          </div>
-        </div>
-        <div className={styles.tabMeta}>
-          Opened {formatDateTime(bookingTab.tab.opened_at)} · Tab ID{" "}
-          <span className={styles.codeText}>{bookingTab.tab.id}</span>
-        </div>
-      </div>
+                              <div className={styles.tabPanel}>
+                                <div className={styles.tabHeader}>
+                                  <div>
+                                    <div className={styles.detailTitle}>Live Tab / Invoice</div>
+                                    <div className={styles.tabTitleRow}>
+                                      <h3 className={styles.tabTitle}>
+                                        {bookingTab.tab.party_name || row.customer_name || "Open Tab"}
+                                      </h3>
+                                      <div className={styles.statusGroup}>
+                                        <StatusPill
+                                          label={bookingTab.tab.tab_type}
+                                          className={styles.toneNeutral}
+                                        />
+                                        <StatusPill
+                                          label={bookingTab.tab.status}
+                                          className={toneClass(bookingTab.tab.status)}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className={styles.tabMeta}>
+                                      Opened {formatDateTime(bookingTab.tab.opened_at)} · Tab ID{" "}
+                                      <span className={styles.codeText}>{bookingTab.tab.id}</span>
+                                    </div>
+                                  </div>
 
-      <div className={styles.tabActions}>
-        <button
-          className={styles.secondaryButton}
-          disabled={tabBusy}
-          onClick={() => refreshExistingTab(row.booking_id || bookingTab.tab.id)}
-        >
-          Refresh Tab
-        </button>
-        <button
-          className={styles.secondaryButton}
-          disabled={tabBusy}
-          onClick={() =>
-            openAddItemModalForBooking(
-              {
-                ...row,
-                booking_id: row.booking_id || bookingTab.tab.id,
-              },
-              ITEM_PRESETS[0]
-            )
-          }
-        >
-          + Coke
-        </button>
-        <button
-          className={styles.secondaryButton}
-          disabled={tabBusy}
-          onClick={() =>
-            openAddItemModalForBooking(
-              {
-                ...row,
-                booking_id: row.booking_id || bookingTab.tab.id,
-              },
-              ITEM_PRESETS[1]
-            )
-          }
-        >
-          + Water
-        </button>
-        <button
-          className={styles.secondaryButton}
-          disabled={tabBusy}
-          onClick={() =>
-            openAddItemModalForBooking(
-              {
-                ...row,
-                booking_id: row.booking_id || bookingTab.tab.id,
-              },
-              ITEM_PRESETS[2]
-            )
-          }
-        >
-          + Shirt
-        </button>
-        <button
-          className={styles.secondaryButton}
-          disabled={tabBusy}
-          onClick={() =>
-            openAddItemModalForBooking(
-              {
-                ...row,
-                booking_id: row.booking_id || bookingTab.tab.id,
-              },
-              ITEM_PRESETS[3]
-            )
-          }
-        >
-          + Axe
-        </button>
-        <button
-          className={styles.primaryButton}
-          disabled={tabBusy}
-          onClick={() =>
-            openAddItemModalForBooking({
-              ...row,
-              booking_id: row.booking_id || bookingTab.tab.id,
-            })
-          }
-        >
-          + Custom Item
-        </button>
-        <button
-          className={styles.successButton}
-          disabled={tabBusy}
-          onClick={() =>
-            openPaymentModalForBooking({
-              ...row,
-              booking_id: row.booking_id || bookingTab.tab.id,
-            })
-          }
-        >
-          Record Payment
-        </button>
-        <button
-          className={styles.infoButton}
-          disabled={tabBusy || bookingTab.tab.status !== "open"}
-          onClick={() =>
-            updateTabStatusPrompt(row.booking_id || bookingTab.tab.id, "closed")
-          }
-        >
-          Close Tab
-        </button>
-        <button
-          className={styles.dangerButton}
-          disabled={tabBusy || bookingTab.tab.status === "void"}
-          onClick={() =>
-            updateTabStatusPrompt(row.booking_id || bookingTab.tab.id, "void")
-          }
-        >
-          Void Tab
-        </button>
-      </div>
-    </div>
+                                  <div className={styles.tabActions}>
+                                    <button
+                                      className={styles.secondaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        refreshExistingTab(row.booking_id || bookingTab.tab.id)
+                                      }
+                                    >
+                                      Refresh Tab
+                                    </button>
+                                    <button
+                                      className={styles.secondaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        openAddItemModalForBooking(
+                                          {
+                                            ...row,
+                                            booking_id: row.booking_id || bookingTab.tab.id,
+                                          },
+                                          ITEM_PRESETS[0]
+                                        )
+                                      }
+                                    >
+                                      + Coke
+                                    </button>
+                                    <button
+                                      className={styles.secondaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        openAddItemModalForBooking(
+                                          {
+                                            ...row,
+                                            booking_id: row.booking_id || bookingTab.tab.id,
+                                          },
+                                          ITEM_PRESETS[1]
+                                        )
+                                      }
+                                    >
+                                      + Water
+                                    </button>
+                                    <button
+                                      className={styles.secondaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        openAddItemModalForBooking(
+                                          {
+                                            ...row,
+                                            booking_id: row.booking_id || bookingTab.tab.id,
+                                          },
+                                          ITEM_PRESETS[2]
+                                        )
+                                      }
+                                    >
+                                      + Shirt
+                                    </button>
+                                    <button
+                                      className={styles.secondaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        openAddItemModalForBooking(
+                                          {
+                                            ...row,
+                                            booking_id: row.booking_id || bookingTab.tab.id,
+                                          },
+                                          ITEM_PRESETS[3]
+                                        )
+                                      }
+                                    >
+                                      + Axe
+                                    </button>
+                                    <button
+                                      className={styles.primaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        openAddItemModalForBooking({
+                                          ...row,
+                                          booking_id: row.booking_id || bookingTab.tab.id,
+                                        })
+                                      }
+                                    >
+                                      + Custom Item
+                                    </button>
+                                    <button
+                                      className={styles.successButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        openPaymentModalForBooking({
+                                          ...row,
+                                          booking_id: row.booking_id || bookingTab.tab.id,
+                                        })
+                                      }
+                                    >
+                                      Record Payment
+                                    </button>
+                                    <button
+                                      className={styles.infoButton}
+                                      disabled={tabBusy || bookingTab.tab.status !== "open"}
+                                      onClick={() =>
+                                        updateTabStatusPrompt(
+                                          row.booking_id || bookingTab.tab.id,
+                                          "closed"
+                                        )
+                                      }
+                                    >
+                                      Close Tab
+                                    </button>
+                                    <button
+                                      className={styles.dangerButton}
+                                      disabled={tabBusy || bookingTab.tab.status === "void"}
+                                      onClick={() =>
+                                        updateTabStatusPrompt(
+                                          row.booking_id || bookingTab.tab.id,
+                                          "void"
+                                        )
+                                      }
+                                    >
+                                      Void Tab
+                                    </button>
+                                  </div>
+                                </div>
 
-    <div className={styles.tabSummaryGrid}>
-      <div className={styles.tabMetricCard}>
-        <div className={styles.statLabel}>Subtotal</div>
-        <div className={styles.tabMetricValue}>
-          {formatMoney(bookingTab.tab.subtotal)}
-        </div>
-      </div>
-      <div className={styles.tabMetricCard}>
-        <div className={styles.statLabel}>Tax</div>
-        <div className={styles.tabMetricValue}>
-          {formatMoney(bookingTab.tab.tax_total)}
-        </div>
-      </div>
-      <div className={styles.tabMetricCard}>
-        <div className={styles.statLabel}>Grand Total</div>
-        <div className={styles.tabMetricValue}>
-          {formatMoney(bookingTab.tab.grand_total)}
-        </div>
-      </div>
-      <div className={styles.tabMetricCard}>
-        <div className={styles.statLabel}>Paid</div>
-        <div className={styles.tabMetricValue}>
-          {formatMoney(bookingTab.tab.amount_paid)}
-        </div>
-      </div>
-      <div className={styles.tabMetricCard}>
-        <div className={styles.statLabel}>Balance Due</div>
-        <div className={styles.tabMetricValue}>
-          {formatMoney(bookingTab.tab.balance_due)}
-        </div>
-      </div>
-    </div>
+                                <div className={styles.tabSummaryGrid}>
+                                  <div className={styles.tabMetricCard}>
+                                    <div className={styles.statLabel}>Subtotal</div>
+                                    <div className={styles.tabMetricValue}>
+                                      {formatMoney(bookingTab.tab.subtotal)}
+                                    </div>
+                                  </div>
+                                  <div className={styles.tabMetricCard}>
+                                    <div className={styles.statLabel}>Tax</div>
+                                    <div className={styles.tabMetricValue}>
+                                      {formatMoney(bookingTab.tab.tax_total)}
+                                    </div>
+                                  </div>
+                                  <div className={styles.tabMetricCard}>
+                                    <div className={styles.statLabel}>Grand Total</div>
+                                    <div className={styles.tabMetricValue}>
+                                      {formatMoney(bookingTab.tab.grand_total)}
+                                    </div>
+                                  </div>
+                                  <div className={styles.tabMetricCard}>
+                                    <div className={styles.statLabel}>Paid</div>
+                                    <div className={styles.tabMetricValue}>
+                                      {formatMoney(bookingTab.tab.amount_paid)}
+                                    </div>
+                                  </div>
+                                  <div className={styles.tabMetricCard}>
+                                    <div className={styles.statLabel}>Balance Due</div>
+                                    <div className={styles.tabMetricValue}>
+                                      {formatMoney(bookingTab.tab.balance_due)}
+                                    </div>
+                                  </div>
+                                </div>
 
-    <div className={styles.tabBodyGrid}>
-      <div className={styles.tabTableCard}>
-        <div className={styles.detailTitle}>Line Items</div>
-        {bookingTab.line_items.length === 0 ? (
-          <div className={styles.emptyMini}>
-            No line items on this tab yet.
-          </div>
-        ) : (
-          <div className={styles.tabTable}>
-            <div className={styles.tabTableHead}>
-              <div>Item</div>
-              <div>Qty</div>
-              <div>Tax</div>
-              <div>Total</div>
-              <div>Action</div>
-            </div>
-            {bookingTab.line_items.map((item) => {
-              const isVoided =
-                (item.note || "").includes("[VOID LINE ITEM]") ||
-                item.line_total === 0;
-              return (
-                <div
-                  key={item.id}
-                  className={`${styles.tabTableRow} ${
-                    isVoided ? styles.tabRowVoided : ""
-                  }`}
-                >
-                  <div>
-                    <div className={styles.tabItemName}>
-                      {item.description}
-                    </div>
-                    <div className={styles.tabItemMeta}>
-                      {formatLabel(item.item_type)} ·{" "}
-                      {item.tax_exempt_override
-                        ? "tax exempt override"
-                        : item.taxable
-                        ? "taxable"
-                        : "non-taxable"}
-                    </div>
-                  </div>
-                  <div>{item.quantity}</div>
-                  <div>{formatMoney(item.line_tax)}</div>
-                  <div>{formatMoney(item.line_total)}</div>
-                  <div>
-                    <button
-                      className={styles.ghostButton}
-                      disabled={tabBusy || isVoided}
-                      onClick={() =>
-                        voidLineItem(row.booking_id || bookingTab.tab.id, item.id)
-                      }
-                    >
-                      Void
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                                <div className={styles.tabBodyGrid}>
+                                  <div className={styles.tabTableCard}>
+                                    <div className={styles.detailTitle}>Line Items</div>
+                                    {bookingTab.line_items.length === 0 ? (
+                                      <div className={styles.emptyMini}>
+                                        No line items on this tab yet.
+                                      </div>
+                                    ) : (
+                                      <div className={styles.tabTable}>
+                                        <div className={styles.tabTableHead}>
+                                          <div>Item</div>
+                                          <div>Qty</div>
+                                          <div>Tax</div>
+                                          <div>Total</div>
+                                          <div>Action</div>
+                                        </div>
+                                        {bookingTab.line_items.map((item) => {
+                                          const isVoided =
+                                            (item.note || "").includes("[VOID LINE ITEM]") ||
+                                            item.line_total === 0;
+                                          return (
+                                            <div
+                                              key={item.id}
+                                              className={`${styles.tabTableRow} ${
+                                                isVoided ? styles.tabRowVoided : ""
+                                              }`}
+                                            >
+                                              <div>
+                                                <div className={styles.tabItemName}>
+                                                  {item.description}
+                                                </div>
+                                                <div className={styles.tabItemMeta}>
+                                                  {formatLabel(item.item_type)} ·{" "}
+                                                  {item.tax_exempt_override
+                                                    ? "tax exempt override"
+                                                    : item.taxable
+                                                    ? "taxable"
+                                                    : "non-taxable"}
+                                                </div>
+                                              </div>
+                                              <div>{item.quantity}</div>
+                                              <div>{formatMoney(item.line_tax)}</div>
+                                              <div>{formatMoney(item.line_total)}</div>
+                                              <div>
+                                                <button
+                                                  className={styles.ghostButton}
+                                                  disabled={tabBusy || isVoided}
+                                                  onClick={() =>
+                                                    voidLineItem(
+                                                      row.booking_id || bookingTab.tab.id,
+                                                      item.id
+                                                    )
+                                                  }
+                                                >
+                                                  Void
+                                                </button>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
 
                                   <div className={styles.tabTableCard}>
                                     <div className={styles.detailTitle}>Payments</div>
@@ -2192,7 +2199,10 @@ export default function StaffTodayPage() {
                                                 className={styles.ghostButton}
                                                 disabled={tabBusy || payment.status === "void"}
                                                 onClick={() =>
-                                                  voidPayment(row.booking_id, payment.id)
+                                                  voidPayment(
+                                                    row.booking_id || bookingTab.tab.id,
+                                                    payment.id
+                                                  )
                                                 }
                                               >
                                                 Void
@@ -2428,6 +2438,10 @@ export default function StaffTodayPage() {
                   </>
                 )}
               </section>
+            </>
+          )}
+        </div>
+      </main>
 
       {showCreateModal ? (
         <div className={styles.modalOverlay} onClick={closeCreateModal}>
