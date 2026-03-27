@@ -15,10 +15,16 @@ type BookingStatus =
   | "no_show"
   | "unknown";
 
-type WaiverStatus = "signed" | "missing" | "guardian_required" | "unknown";
+type WaiverStatus =
+  | "signed"
+  | "missing"
+  | "guardian_required"
+  | "expired"
+  | "unknown";
 
 type BookingRow = {
   booking_id: string;
+  customer_id: string;
   start_time: string;
   end_time: string;
   customer_name: string;
@@ -30,6 +36,7 @@ type BookingRow = {
   booking_status: BookingStatus;
   payment_status: PaymentStatus;
   waiver_status: WaiverStatus;
+  waiver_url: string;
   total_amount: number;
   amount_paid: number;
   customer_notes: string | null;
@@ -101,8 +108,12 @@ type CreateBookingPayload = {
 type CreateBookingResponse = {
   success: true;
   booking_id: string;
+  customer_id: string;
   booking_status: string;
   payment_status: string;
+  waiver_url: string;
+  waiver_email_sent?: boolean;
+  waiver_email_error?: string | null;
   totals: {
     base_price: number;
     addons_subtotal: number;
@@ -212,7 +223,7 @@ function getPriorityScore(row: BookingRow) {
   return 4;
 }
 
-function defaultCreateForm(date: string): CreateFormState {
+function defaultCreateForm(): CreateFormState {
   return {
     first_name: "",
     last_name: "",
@@ -255,15 +266,22 @@ export default function StaffTodayPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState<CreateFormState>(() =>
-    defaultCreateForm(getLocalDateInputValue())
+    defaultCreateForm()
   );
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availability, setAvailability] = useState<AvailabilitySlot[]>([]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 2500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   async function loadBoard(date = selectedDate) {
     try {
@@ -388,6 +406,7 @@ export default function StaffTodayPage() {
         }),
       });
       await loadBoard(selectedDate);
+      setToast("Booking updated");
     } catch (err: any) {
       alert(err?.message || "Update failed");
     } finally {
@@ -417,9 +436,22 @@ export default function StaffTodayPage() {
     await applyUpdate(row.booking_id, { party_size: size });
   }
 
+  async function handleCopyWaiverLink(row: BookingRow) {
+    try {
+      await navigator.clipboard.writeText(row.waiver_url);
+      setToast("Waiver link copied");
+    } catch {
+      window.prompt("Copy waiver link", row.waiver_url);
+    }
+  }
+
+  function handleOpenWaiver(row: BookingRow) {
+    window.open(row.waiver_url, "_blank", "noopener,noreferrer");
+  }
+
   function openCreateModal() {
     setCreateError("");
-    setCreateForm(defaultCreateForm(selectedDate));
+    setCreateForm(defaultCreateForm());
     setAvailability([]);
     setShowCreateModal(true);
   }
@@ -462,14 +494,22 @@ export default function StaffTodayPage() {
         payment_status,
       };
 
-      await opsFetch<CreateBookingResponse>("/api/admin/create-booking", {
+      const created = await opsFetch<CreateBookingResponse>("/api/admin/create-booking", {
         method: "POST",
         body: JSON.stringify(payload),
       });
 
       setShowCreateModal(false);
-      setCreateForm(defaultCreateForm(selectedDate));
+      setCreateForm(defaultCreateForm());
       await loadBoard(selectedDate);
+
+      if (created.waiver_email_sent) {
+        setToast("Booking created and waiver emailed");
+      } else if (created.waiver_url) {
+        setToast("Booking created. Open or copy the waiver link.");
+      } else {
+        setToast("Booking created");
+      }
     } catch (err: any) {
       setCreateError(err?.message || "Failed to create booking");
     } finally {
@@ -481,6 +521,8 @@ export default function StaffTodayPage() {
     <>
       <main className={styles.page}>
         <div className={styles.shell}>
+          {toast ? <div className={styles.toast}>{toast}</div> : null}
+
           <section className={styles.hero}>
             <div className={styles.heroContent}>
               <div>
@@ -488,7 +530,8 @@ export default function StaffTodayPage() {
                 <h1 className={styles.title}>Operations Board</h1>
                 <p className={styles.subtitle}>
                   Live front-desk command surface for today, tomorrow, and future
-                  bookings. Staff can review, adjust, and create bookings directly.
+                  bookings. Staff can review, adjust, create bookings, and drive
+                  waiver completion directly.
                 </p>
                 <div className={styles.metaRow}>
                   <span className={styles.metaPill}>Connected: {OPS_API_BASE}</span>
@@ -818,6 +861,23 @@ export default function StaffTodayPage() {
                                 {isExpanded ? "Hide" : "Details"}
                               </button>
                             </div>
+
+                            <div className={styles.actionGroup}>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenWaiver(row)}
+                                className={styles.waiverButton}
+                              >
+                                Open Waiver
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyWaiverLink(row)}
+                                className={styles.secondaryButton}
+                              >
+                                Copy Link
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -844,7 +904,7 @@ export default function StaffTodayPage() {
                                 )}`}
                               />
                               <div className={styles.detailBox}>
-                                <div className={styles.detailTitle}>Quick Adjust</div>
+                                <div className={styles.detailTitle}>Waiver + Quick Adjust</div>
 
                                 <div className={styles.quickInfo}>
                                   <div>
@@ -857,9 +917,32 @@ export default function StaffTodayPage() {
                                     Booking ID:{" "}
                                     <span className={styles.codeText}>{row.booking_id}</span>
                                   </div>
+                                  <div className={styles.waiverUrlBlock}>
+                                    <span className={styles.quickStrong}>Waiver URL:</span>
+                                    <a
+                                      href={row.waiver_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={styles.waiverLink}
+                                    >
+                                      {row.waiver_url}
+                                    </a>
+                                  </div>
                                 </div>
 
                                 <div className={styles.quickActions}>
+                                  <button
+                                    onClick={() => handleOpenWaiver(row)}
+                                    className={styles.waiverButton}
+                                  >
+                                    Open Waiver
+                                  </button>
+                                  <button
+                                    onClick={() => handleCopyWaiverLink(row)}
+                                    className={styles.ghostButton}
+                                  >
+                                    Copy Waiver Link
+                                  </button>
                                   <button
                                     onClick={() => handleEditPartySize(row)}
                                     className={styles.ghostButton}
