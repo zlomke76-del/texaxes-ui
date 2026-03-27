@@ -412,6 +412,12 @@ select.input {
   font-size: 14px;
 }
 
+.emptyMini {
+  color: rgba(248, 250, 252, 0.58);
+  font-size: 14px;
+  padding: 18px 0;
+}
+
 .row {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -526,7 +532,10 @@ select.input {
 }
 
 .detailMuted,
-.paymentMuted {
+.paymentMuted,
+.tabMeta,
+.tabItemMeta,
+.openTabMeta {
   margin-top: 6px;
   color: rgba(248, 250, 252, 0.58);
   font-size: 14px;
@@ -698,7 +707,13 @@ select.input {
   gap: 16px;
 }
 
-.detailBox {
+.detailBox,
+.tabPanel,
+.tabPanelPlaceholder,
+.openTabsPanel,
+.tabMetricCard,
+.tabTableCard,
+.openTabCard {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.05);
@@ -759,6 +774,107 @@ select.input {
   text-decoration: underline;
   text-underline-offset: 4px;
   word-break: break-all;
+}
+
+.tabPanel {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tabPanelPlaceholder {
+  margin-top: 16px;
+}
+
+.tabHeader,
+.openTabsHeader,
+.openTabTop,
+.tabTitleRow {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.tabTitle,
+.openTabsTitle {
+  margin: 0;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.tabActions,
+.openTabsActions,
+.openTabMetrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tabSummaryGrid,
+.openTabsStats,
+.tabBodyGrid,
+.openTabsList {
+  display: grid;
+  gap: 16px;
+}
+
+.tabMetricValue {
+  margin-top: 8px;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.tabTable {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tabTableHead,
+.tabTableRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) 70px 90px 110px 90px;
+  gap: 12px;
+  align-items: center;
+}
+
+.tabTableHead {
+  color: rgba(248, 250, 252, 0.45);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tabTableRow {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 12px;
+}
+
+.tabItemName {
+  color: #fff;
+  font-weight: 700;
+}
+
+.tabRowVoided {
+  opacity: 0.55;
+}
+
+.openTabsPanel {
+  margin-top: 24px;
+}
+
+.openTabCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .modalOverlay {
@@ -1025,6 +1141,16 @@ select.input {
   .taxGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .tabSummaryGrid,
+  .openTabsStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tabBodyGrid,
+  .openTabsList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 1200px) {
@@ -1051,6 +1177,22 @@ select.input {
   }
 
   .slotGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tabSummaryGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .tabBodyGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .openTabsStats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .openTabsList {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
