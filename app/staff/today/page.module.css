@@ -323,7 +323,8 @@ select.input {
 .primaryButton,
 .modalCloseButton,
 .slotButton,
-.waiverButton {
+.waiverButton,
+.taxButton {
   appearance: none;
   border: 0;
   cursor: pointer;
@@ -573,6 +574,12 @@ select.input {
   color: rgba(248, 250, 252, 0.75);
 }
 
+.taxExemptPill {
+  border-color: rgba(125, 211, 252, 0.22);
+  background: rgba(14, 165, 233, 0.16);
+  color: #bae6fd;
+}
+
 .actionStack {
   display: flex;
   flex-direction: column;
@@ -592,7 +599,8 @@ select.input {
 .dangerButton,
 .ghostButton,
 .primaryButton,
-.waiverButton {
+.waiverButton,
+.taxButton {
   border-radius: 12px;
   padding: 10px 12px;
   color: #fff;
@@ -667,6 +675,16 @@ select.input {
 
 .waiverButton:hover {
   background: rgba(249, 115, 22, 0.28);
+}
+
+.taxButton {
+  background: rgba(14, 165, 233, 0.18);
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  color: #bae6fd;
+}
+
+.taxButton:hover {
+  background: rgba(14, 165, 233, 0.28);
 }
 
 .expandPanel {
@@ -831,6 +849,60 @@ select.input {
   text-transform: uppercase;
 }
 
+.taxPanel {
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 18px;
+  background: rgba(14, 165, 233, 0.06);
+  padding: 16px;
+}
+
+.taxGrid {
+  display: grid;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.taxChecklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checkboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(248, 250, 252, 0.88);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.checkboxRow input {
+  width: 16px;
+  height: 16px;
+  accent-color: #f97316;
+}
+
+.taxWarning,
+.taxVerified {
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.taxWarning {
+  border: 1px solid rgba(250, 204, 21, 0.2);
+  background: rgba(234, 179, 8, 0.12);
+  color: #fde68a;
+}
+
+.taxVerified {
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  background: rgba(34, 197, 94, 0.12);
+  color: #bbf7d0;
+}
+
 .slotGrid {
   display: grid;
   gap: 12px;
@@ -910,7 +982,8 @@ select.input {
 .primaryButton:disabled,
 .modalCloseButton:disabled,
 .slotButton:disabled,
-.waiverButton:disabled {
+.waiverButton:disabled,
+.taxButton:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -946,6 +1019,10 @@ select.input {
   }
 
   .slotGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .taxGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
