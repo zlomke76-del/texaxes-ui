@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import styles from "./page.module.css";
 
 type PaymentStatus = "paid" | "pending" | "failed" | "void" | "unknown";
 type BookingStatus =
@@ -86,25 +87,25 @@ function formatTime(value: string) {
   });
 }
 
-function getStatusTone(status: string) {
+function toneClass(status: string) {
   switch (status) {
     case "paid":
     case "checked_in":
     case "completed":
     case "signed":
-      return "good";
+      return styles.toneGood;
     case "pending":
     case "awaiting_payment":
     case "missing":
     case "guardian_required":
-      return "warn";
+      return styles.toneWarn;
     case "failed":
     case "expired":
     case "no_show":
     case "void":
-      return "bad";
+      return styles.toneBad;
     default:
-      return "neutral";
+      return styles.toneNeutral;
   }
 }
 
@@ -140,7 +141,7 @@ async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const json = text ? JSON.parse(text) : {};
 
   if (!res.ok) {
-    throw new Error(json?.error || `Request failed: ${res.status}`);
+    throw new Error((json as any)?.error || `Request failed: ${res.status}`);
   }
 
   return json as T;
@@ -196,22 +197,12 @@ export default function StaffTodayPage() {
           100
         : 0;
 
-    const missingWaivers = bookings.filter(
-      (row) => row.waiver_status !== "signed"
-    ).length;
-
-    const unpaidCount = bookings.filter(
-      (row) => row.payment_status !== "paid"
-    ).length;
-
-    const attentionCount = bookings.filter(isAttentionBooking).length;
-
     return {
       outstanding,
       percentCollected,
-      attentionCount,
-      missingWaivers,
-      unpaidCount,
+      attentionCount: bookings.filter(isAttentionBooking).length,
+      missingWaivers: bookings.filter((row) => row.waiver_status !== "signed").length,
+      unpaidCount: bookings.filter((row) => row.payment_status !== "paid").length,
     };
   }, [data]);
 
@@ -223,29 +214,21 @@ export default function StaffTodayPage() {
     });
 
     if (filter === "all") return rows;
-
-    if (filter === "attention") {
-      return rows.filter(isAttentionBooking);
-    }
-
+    if (filter === "attention") return rows.filter(isAttentionBooking);
     if (filter === "unpaid") {
       return rows.filter(
         (row) => row.payment_status !== "paid" && row.booking_status !== "completed"
       );
     }
-
     if (filter === "checked_in") {
       return rows.filter((row) => row.booking_status === "checked_in");
     }
-
     if (filter === "completed") {
       return rows.filter((row) => row.booking_status === "completed");
     }
-
     if (filter === "no_show") {
       return rows.filter((row) => row.booking_status === "no_show");
     }
-
     if (filter === "upcoming") {
       return rows.filter((row) =>
         ["pending", "awaiting_payment", "confirmed", "paid"].includes(
@@ -301,37 +284,25 @@ export default function StaffTodayPage() {
   }
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-white">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(251,146,60,0.18),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(249,115,22,0.1),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 shadow-2xl shadow-black/25">
-          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(135deg,rgba(255,255,255,0.04),transparent_40%,transparent_60%,rgba(255,255,255,0.03))]" />
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+    <main className={styles.page}>
+      <div className={styles.shell}>
+        <section className={styles.hero}>
+          <div className={styles.heroContent}>
             <div>
-              <div className="mb-3 inline-flex items-center rounded-full border border-orange-300/20 bg-orange-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-orange-200">
-                Tex Axes Staff Board
-              </div>
-              <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-                Today’s Operations
-              </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
+              <div className={styles.kicker}>Tex Axes Staff Board</div>
+              <h1 className={styles.title}>Today’s Operations</h1>
+              <p className={styles.subtitle}>
                 Live front-desk command surface for bookings, payment visibility,
                 waiver readiness, and quick operational adjustments.
               </p>
-              <div className="mt-4 flex flex-wrap gap-3 text-xs text-white/45">
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                  Connected: {OPS_API_BASE}
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                  Date: {data?.date || "—"}
-                </span>
+              <div className={styles.metaRow}>
+                <span className={styles.metaPill}>Connected: {OPS_API_BASE}</span>
+                <span className={styles.metaPill}>Date: {data?.date || "—"}</span>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={loadBoard}
-                className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
-              >
+            <div className={styles.heroActions}>
+              <button onClick={loadBoard} className={styles.secondaryButton}>
                 Refresh Board
               </button>
             </div>
@@ -339,41 +310,32 @@ export default function StaffTodayPage() {
         </section>
 
         {loading ? (
-          <div className="mt-6 rounded-[28px] border border-white/10 bg-white/5 p-6 text-white/70 shadow-xl shadow-black/10">
-            Loading today’s board...
-          </div>
+          <div className={styles.messageCard}>Loading today’s board...</div>
         ) : error ? (
-          <div className="mt-6 rounded-[28px] border border-red-400/20 bg-red-500/10 p-6 text-red-200 shadow-xl shadow-black/10">
-            {error}
-          </div>
+          <div className={`${styles.messageCard} ${styles.errorCard}`}>{error}</div>
         ) : (
           <>
             {derived.attentionCount > 0 ? (
-              <section className="mt-6 rounded-[24px] border border-red-400/20 bg-red-500/10 p-4 shadow-xl shadow-black/10">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-red-200/80">
-                      Attention Required
-                    </div>
-                    <div className="mt-1 text-lg font-bold text-red-100">
-                      {derived.attentionCount} booking
-                      {derived.attentionCount === 1 ? "" : "s"} need action
-                    </div>
+              <section className={styles.attentionStrip}>
+                <div>
+                  <div className={styles.attentionLabel}>Attention Required</div>
+                  <div className={styles.attentionTitle}>
+                    {derived.attentionCount} booking
+                    {derived.attentionCount === 1 ? "" : "s"} need action
                   </div>
-
-                  <div className="flex flex-wrap gap-2 text-xs text-red-100/90">
-                    <span className="rounded-full border border-red-300/20 bg-red-400/10 px-3 py-1.5">
-                      Unpaid: {derived.unpaidCount}
-                    </span>
-                    <span className="rounded-full border border-red-300/20 bg-red-400/10 px-3 py-1.5">
-                      Waivers pending: {derived.missingWaivers}
-                    </span>
-                  </div>
+                </div>
+                <div className={styles.attentionMetrics}>
+                  <span className={styles.attentionPill}>
+                    Unpaid: {derived.unpaidCount}
+                  </span>
+                  <span className={styles.attentionPill}>
+                    Waivers pending: {derived.missingWaivers}
+                  </span>
                 </div>
               </section>
             ) : null}
 
-            <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            <section className={styles.statsGrid}>
               <StatCard label="Bookings" value={String(data?.summary.booking_count || 0)} />
               <StatCard label="Paid" value={String(data?.summary.paid_count || 0)} />
               <StatCard label="Unpaid" value={String(data?.summary.unpaid_count || 0)} />
@@ -385,39 +347,33 @@ export default function StaffTodayPage() {
               <StatCard label="Attention" value={String(derived.attentionCount)} />
             </section>
 
-            <section className="mt-6 rounded-[24px] border border-white/10 bg-white/5 p-4 shadow-xl shadow-black/10">
-              <div className="flex flex-wrap gap-3">
-                {(
-                  [
-                    ["all", "All"],
-                    ["attention", "Attention"],
-                    ["upcoming", "Upcoming"],
-                    ["unpaid", "Unpaid"],
-                    ["checked_in", "Checked In"],
-                    ["completed", "Completed"],
-                    ["no_show", "No Show"],
-                  ] as Array<[FilterKey, string]>
-                ).map(([key, label]) => {
-                  const active = filter === key;
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => setFilter(key)}
-                      className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                        active
-                          ? "bg-orange-500 text-white shadow-lg shadow-orange-900/30"
-                          : "border border-white/10 bg-white/5 text-white/75 hover:bg-white/10"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
+            <section className={styles.filterBar}>
+              {(
+                [
+                  ["all", "All"],
+                  ["attention", "Attention"],
+                  ["upcoming", "Upcoming"],
+                  ["unpaid", "Unpaid"],
+                  ["checked_in", "Checked In"],
+                  ["completed", "Completed"],
+                  ["no_show", "No Show"],
+                ] as Array<[FilterKey, string]>
+              ).map(([key, label]) => {
+                const active = filter === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setFilter(key)}
+                    className={active ? styles.filterActive : styles.filterButton}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </section>
 
-            <section className="mt-6 overflow-hidden rounded-[28px] border border-white/10 bg-white/5 shadow-2xl shadow-black/20">
-              <div className="hidden grid-cols-[120px_1.55fr_1fr_1fr_1fr_210px] gap-4 border-b border-white/10 bg-black/15 px-5 py-4 text-xs font-bold uppercase tracking-[0.16em] text-white/45 lg:grid">
+            <section className={styles.board}>
+              <div className={styles.tableHead}>
                 <div>Time</div>
                 <div>Guest / Group</div>
                 <div>Details</div>
@@ -427,15 +383,11 @@ export default function StaffTodayPage() {
               </div>
 
               {filteredBookings.length === 0 ? (
-                <div className="p-10">
-                  <div className="rounded-[24px] border border-dashed border-white/10 bg-black/10 p-8 text-center">
-                    <div className="text-sm font-bold uppercase tracking-[0.18em] text-white/35">
-                      Clear Board
-                    </div>
-                    <div className="mt-3 text-xl font-bold text-white/80">
-                      No bookings match this view.
-                    </div>
-                    <p className="mt-2 text-sm text-white/50">
+                <div className={styles.emptyWrap}>
+                  <div className={styles.emptyCard}>
+                    <div className={styles.emptyKicker}>Clear Board</div>
+                    <div className={styles.emptyTitle}>No bookings match this view.</div>
+                    <p className={styles.emptyText}>
                       This is now a valid empty operational state, not an error.
                     </p>
                   </div>
@@ -465,84 +417,62 @@ export default function StaffTodayPage() {
 
                   const attention = isAttentionBooking(row);
 
+                  const rowClassName = [
+                    styles.row,
+                    late ? styles.rowLate : "",
+                    urgent ? styles.rowUrgent : "",
+                    attention ? styles.rowAttention : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+
                   return (
-                    <div
-                      key={row.booking_id}
-                      className={`border-b border-white/10 transition last:border-b-0 ${
-                        late
-                          ? "bg-red-500/10"
-                          : urgent
-                          ? "bg-orange-500/10"
-                          : attention
-                          ? "bg-white/[0.03]"
-                          : ""
-                      }`}
-                    >
-                      <div className="grid gap-4 px-5 py-5 lg:grid-cols-[120px_1.55fr_1fr_1fr_1fr_210px] lg:items-start">
+                    <div key={row.booking_id} className={rowClassName}>
+                      <div className={styles.rowGrid}>
                         <div>
-                          <div className="text-base font-black text-white">
-                            {formatTime(row.start_time)}
-                          </div>
-                          <div className="text-sm text-white/50">
-                            {formatTime(row.end_time)}
-                          </div>
+                          <div className={styles.timePrimary}>{formatTime(row.start_time)}</div>
+                          <div className={styles.timeSecondary}>{formatTime(row.end_time)}</div>
                           {late ? (
-                            <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-red-200">
-                              Past due check-in
-                            </div>
+                            <div className={styles.lateLabel}>Past due check-in</div>
                           ) : urgent ? (
-                            <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-orange-200">
-                              Starting now
-                            </div>
+                            <div className={styles.urgentLabel}>Starting now</div>
                           ) : null}
                         </div>
 
                         <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="text-base font-bold text-white">
-                              {row.customer_name}
-                            </div>
+                          <div className={styles.customerRow}>
+                            <div className={styles.customerName}>{row.customer_name}</div>
                             {attention ? (
-                              <span className="rounded-full border border-orange-300/20 bg-orange-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-orange-200">
-                                Needs attention
-                              </span>
+                              <span className={styles.attentionTag}>Needs attention</span>
                             ) : null}
                           </div>
 
-                          <div className="mt-2 space-y-1 text-sm">
+                          <div className={styles.contactBlock}>
                             {row.email ? (
-                              <a
-                                href={`mailto:${row.email}`}
-                                className="block text-white/70 underline decoration-white/20 underline-offset-4 hover:text-white"
-                              >
+                              <a href={`mailto:${row.email}`} className={styles.contactLink}>
                                 {row.email}
                               </a>
                             ) : (
-                              <div className="text-white/35">No email</div>
+                              <div className={styles.contactMuted}>No email</div>
                             )}
 
                             {row.phone ? (
-                              <a
-                                href={`tel:${row.phone}`}
-                                className="block text-white/60 underline decoration-white/20 underline-offset-4 hover:text-white"
-                              >
+                              <a href={`tel:${row.phone}`} className={styles.contactLinkMuted}>
                                 {row.phone}
                               </a>
                             ) : (
-                              <div className="text-white/35">No phone</div>
+                              <div className={styles.contactMuted}>No phone</div>
                             )}
                           </div>
                         </div>
 
                         <div>
-                          <div className="text-sm font-semibold text-white">
-                            Party of {row.party_size}
-                          </div>
-                          <div className="mt-1 text-sm text-white/65">
+                          <div className={styles.detailStrong}>Party of {row.party_size}</div>
+                          <div className={styles.detailMuted}>
                             {(row.booking_type || "open").replaceAll("_", " ")} ·{" "}
                             {(row.booking_source || "unknown").replaceAll("_", " ")}
                           </div>
-                          <div className="mt-2 text-sm text-white/50">
+                          <div className={styles.detailMuted}>
                             Bays: {row.bays_allocated ?? "-"} ·{" "}
                             {(row.allocation_mode || "-").replaceAll("_", " ")}
                           </div>
@@ -551,35 +481,38 @@ export default function StaffTodayPage() {
                         <div>
                           <StatusPill
                             label={row.payment_status}
-                            tone={getStatusTone(row.payment_status)}
+                            className={toneClass(row.payment_status)}
                           />
-                          <div className="mt-3 text-sm text-white/75">
+                          <div className={styles.paymentStrong}>
                             Due: {formatMoney(row.total_amount)}
                           </div>
-                          <div className="text-sm text-white/55">
+                          <div className={styles.paymentMuted}>
                             Paid: {formatMoney(row.amount_paid)}
                           </div>
-                          <div className="mt-1 text-sm font-semibold text-white/80">
+                          <div className={styles.paymentStrong}>
                             Outstanding:{" "}
                             {formatMoney(
-                              Math.max(0, Number(row.total_amount || 0) - Number(row.amount_paid || 0))
+                              Math.max(
+                                0,
+                                Number(row.total_amount || 0) - Number(row.amount_paid || 0)
+                              )
                             )}
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
+                        <div className={styles.statusGroup}>
                           <StatusPill
                             label={row.booking_status}
-                            tone={getStatusTone(row.booking_status)}
+                            className={toneClass(row.booking_status)}
                           />
                           <StatusPill
                             label={row.waiver_status}
-                            tone={getStatusTone(row.waiver_status)}
+                            className={toneClass(row.waiver_status)}
                           />
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-wrap gap-2">
+                        <div className={styles.actionStack}>
+                          <div className={styles.actionGroup}>
                             <button
                               disabled={busy}
                               onClick={() =>
@@ -592,7 +525,7 @@ export default function StaffTodayPage() {
                                   amount_paid: row.total_amount,
                                 })
                               }
-                              className="rounded-xl bg-green-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-green-400 disabled:opacity-50"
+                              className={styles.successButton}
                             >
                               Mark Paid
                             </button>
@@ -605,13 +538,13 @@ export default function StaffTodayPage() {
                                   amount_paid: 0,
                                 })
                               }
-                              className="rounded-xl bg-yellow-500/90 px-3 py-2 text-xs font-bold text-white transition hover:bg-yellow-400 disabled:opacity-50"
+                              className={styles.warnButton}
                             >
                               Mark Unpaid
                             </button>
                           </div>
 
-                          <div className="flex flex-wrap gap-2">
+                          <div className={styles.actionGroup}>
                             <button
                               disabled={busy}
                               onClick={() =>
@@ -619,7 +552,7 @@ export default function StaffTodayPage() {
                                   booking_status: "checked_in",
                                 })
                               }
-                              className="rounded-xl bg-blue-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-400 disabled:opacity-50"
+                              className={styles.infoButton}
                             >
                               Check In
                             </button>
@@ -631,7 +564,7 @@ export default function StaffTodayPage() {
                                   booking_status: "completed",
                                 })
                               }
-                              className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/15 disabled:opacity-50"
+                              className={styles.ghostButton}
                             >
                               Complete
                             </button>
@@ -643,7 +576,7 @@ export default function StaffTodayPage() {
                                   booking_status: "no_show",
                                 })
                               }
-                              className="rounded-xl bg-red-500/80 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-400 disabled:opacity-50"
+                              className={styles.dangerButton}
                             >
                               No Show
                             </button>
@@ -651,7 +584,7 @@ export default function StaffTodayPage() {
                             <button
                               disabled={busy}
                               onClick={() => setExpanded(isExpanded ? null : row.booking_id)}
-                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/10 disabled:opacity-50"
+                              className={styles.secondaryButton}
                             >
                               {isExpanded ? "Hide" : "Details"}
                             </button>
@@ -660,8 +593,8 @@ export default function StaffTodayPage() {
                       </div>
 
                       {isExpanded ? (
-                        <div className="border-t border-white/10 bg-black/20 px-5 py-5">
-                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div className={styles.expandPanel}>
+                          <div className={styles.expandGrid}>
                             <DetailBox
                               title="Customer Notes"
                               value={row.customer_notes || "None"}
@@ -681,36 +614,32 @@ export default function StaffTodayPage() {
                                 )
                               )}`}
                             />
-                            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                              <div className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-white/45">
-                                Quick Adjust
-                              </div>
+                            <div className={styles.detailBox}>
+                              <div className={styles.detailTitle}>Quick Adjust</div>
 
-                              <div className="mb-4 space-y-2 text-sm text-white/70">
+                              <div className={styles.quickInfo}>
                                 <div>
                                   Waiver:{" "}
-                                  <span className="font-semibold text-white">
+                                  <span className={styles.quickStrong}>
                                     {row.waiver_status.replaceAll("_", " ")}
                                   </span>
                                 </div>
                                 <div>
                                   Booking ID:{" "}
-                                  <span className="font-mono text-xs text-white/60">
-                                    {row.booking_id}
-                                  </span>
+                                  <span className={styles.codeText}>{row.booking_id}</span>
                                 </div>
                               </div>
 
-                              <div className="flex flex-wrap gap-2">
+                              <div className={styles.quickActions}>
                                 <button
                                   onClick={() => handleEditPartySize(row)}
-                                  className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/15"
+                                  className={styles.ghostButton}
                                 >
                                   Edit Party Size
                                 </button>
                                 <button
                                   onClick={() => handleEditNotes(row)}
-                                  className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/15"
+                                  className={styles.ghostButton}
                                 >
                                   Edit Notes
                                 </button>
@@ -733,45 +662,28 @@ export default function StaffTodayPage() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 shadow-xl shadow-black/10 backdrop-blur-sm">
-      <div className="text-xs font-bold uppercase tracking-[0.16em] text-white/45">
-        {label}
-      </div>
-      <div className="mt-3 text-3xl font-black tracking-tight text-white">
-        {value}
-      </div>
+    <div className={styles.statCard}>
+      <div className={styles.statLabel}>{label}</div>
+      <div className={styles.statValue}>{value}</div>
     </div>
   );
 }
 
-function StatusPill({ label, tone }: { label: string; tone: string }) {
-  const toneClass =
-    tone === "good"
-      ? "border-green-400/20 bg-green-500/15 text-green-200"
-      : tone === "warn"
-      ? "border-yellow-400/20 bg-yellow-500/15 text-yellow-200"
-      : tone === "bad"
-      ? "border-red-400/20 bg-red-500/15 text-red-200"
-      : "border-white/10 bg-white/10 text-white/75";
-
-  return (
-    <span
-      className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] ${toneClass}`}
-    >
-      {label.replaceAll("_", " ")}
-    </span>
-  );
+function StatusPill({
+  label,
+  className,
+}: {
+  label: string;
+  className: string;
+}) {
+  return <span className={`${styles.pill} ${className}`}>{label.replaceAll("_", " ")}</span>;
 }
 
 function DetailBox({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-      <div className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-white/45">
-        {title}
-      </div>
-      <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-white/75">
-        {value}
-      </pre>
+    <div className={styles.detailBox}>
+      <div className={styles.detailTitle}>{title}</div>
+      <pre className={styles.detailValue}>{value}</pre>
     </div>
   );
 }
