@@ -2281,139 +2281,153 @@ export default function StaffTodayPage() {
 
                     <div className={styles.openTabsList}>
                       {openTabsSummary.tabs.map((tab) => {
-  const bookingKey = tab.booking_id || tab.id;
-  const tabDetail = tabDetailsByBooking[bookingKey];
-  const tabBusy = tabBusyId === bookingKey;
+                        const bookingKey = tab.booking_id || tab.id;
+                        const tabDetail = tabDetailsByBooking[bookingKey];
+                        const tabBusy = tabBusyId === bookingKey;
 
-  return (
-    <div key={tab.id} className={styles.openTabCard}>
-      <div className={styles.openTabTop}>
-        <div>
-          <div className={styles.customerName}>
-            {tab.party_name ||
-              tab.customer?.full_name ||
-              `${formatLabel(tab.tab_type)} tab`}
-          </div>
-          <div className={styles.detailMuted}>
-            {formatLabel(tab.tab_type)} · party of {tab.party_size}
-          </div>
-          <div className={styles.detailMuted}>
-            Opened {formatDateTime(tab.opened_at)}
-          </div>
-        </div>
-        <div className={styles.statusGroup}>
-          <StatusPill
-            label={tab.status}
-            className={toneClass(tab.status)}
-          />
-        </div>
-      </div>
+                        return (
+                          <div key={tab.id} className={styles.openTabCard}>
+                            <div className={styles.openTabTop}>
+                              <div>
+                                <div className={styles.customerName}>
+                                  {tab.party_name ||
+                                    tab.customer?.full_name ||
+                                    `${formatLabel(tab.tab_type)} tab`}
+                                </div>
+                                <div className={styles.detailMuted}>
+                                  {formatLabel(tab.tab_type)} · party of {tab.party_size}
+                                </div>
+                                <div className={styles.detailMuted}>
+                                  Opened {formatDateTime(tab.opened_at)}
+                                </div>
+                              </div>
+                              <div className={styles.statusGroup}>
+                                <StatusPill
+                                  label={tab.status}
+                                  className={toneClass(tab.status)}
+                                />
+                              </div>
+                            </div>
 
-      <div className={styles.openTabMetrics}>
-        <span className={styles.attentionPill}>
-          Total {formatMoney(tab.grand_total)}
-        </span>
-        <span className={styles.attentionPill}>
-          Paid {formatMoney(tab.amount_paid)}
-        </span>
-        <span className={styles.attentionPill}>
-          Balance {formatMoney(tab.balance_due)}
-        </span>
-      </div>
+                            <div className={styles.openTabMetrics}>
+                              <span className={styles.attentionPill}>
+                                Total {formatMoney(tab.grand_total)}
+                              </span>
+                              <span className={styles.attentionPill}>
+                                Paid {formatMoney(tab.amount_paid)}
+                              </span>
+                              <span className={styles.attentionPill}>
+                                Balance {formatMoney(tab.balance_due)}
+                              </span>
+                            </div>
 
-      <div className={styles.openTabMeta}>
-        {tab.booking_id ? (
-          <span className={styles.codeText}>
-            Booking: {tab.booking_id}
-          </span>
-        ) : (
-          <span className={styles.codeText}>Standalone tab</span>
-        )}
-      </div>
+                            <div className={styles.openTabMeta}>
+                              {tab.booking_id ? (
+                                <span className={styles.codeText}>
+                                  Booking: {tab.booking_id}
+                                </span>
+                              ) : (
+                                <span className={styles.codeText}>Standalone tab</span>
+                              )}
+                            </div>
 
-      <div className={styles.actionGroup}>
-        <button
-          type="button"
-          disabled={tabBusy}
-          onClick={async () => {
-            try {
-              setTabBusyId(bookingKey);
-              await loadTab(tab.id, bookingKey);
-              setExpanded(bookingKey);
-              setToast("Tab loaded");
-            } catch (err: any) {
-              alert(err?.message || "Failed to load tab");
-            } finally {
-              setTabBusyId(null);
-            }
-          }}
-          className={styles.primaryButton}
-        >
-          {tabDetail ? "Refresh Tab" : "Open Tab"}
-        </button>
+                            <div className={styles.actionGroup}>
+                              <button
+                                type="button"
+                                disabled={tabBusy}
+                                onClick={async () => {
+                                  try {
+                                    setTabBusyId(bookingKey);
+                                    await loadTab(tab.id, bookingKey);
+                                    setExpanded(bookingKey);
+                                    setToast("Tab loaded");
+                                  } catch (err: any) {
+                                    alert(err?.message || "Failed to load tab");
+                                  } finally {
+                                    setTabBusyId(null);
+                                  }
+                                }}
+                                className={styles.primaryButton}
+                              >
+                                {tabDetail ? "Refresh Tab" : "Open Tab"}
+                              </button>
 
-        <button
-          type="button"
-          disabled={tabBusy}
-          onClick={async () => {
-            try {
-              setTabBusyId(bookingKey);
+                              <button
+                                type="button"
+                                disabled={tabBusy}
+                                onClick={async () => {
+                                  try {
+                                    setTabBusyId(bookingKey);
 
-              const detail = tabDetail || (await loadTab(tab.id, bookingKey));
+                                    const detail =
+                                      tabDetail || (await loadTab(tab.id, bookingKey));
 
-              setAddItemError("");
-              setAddItemForm(
-                buildAddItemForm(bookingKey, detail.tab.id, ITEM_PRESETS[0])
-              );
-              setShowAddItemModal(true);
-            } catch (err: any) {
-              alert(err?.message || "Failed to open item modal");
-            } finally {
-              setTabBusyId(null);
-            }
-          }}
-          className={styles.secondaryButton}
-        >
-          + Item
-        </button>
+                                    setAddItemError("");
+                                    setAddItemForm(
+                                      buildAddItemForm(
+                                        bookingKey,
+                                        detail.tab.id,
+                                        ITEM_PRESETS[0]
+                                      )
+                                    );
+                                    setShowAddItemModal(true);
+                                  } catch (err: any) {
+                                    alert(err?.message || "Failed to open item modal");
+                                  } finally {
+                                    setTabBusyId(null);
+                                  }
+                                }}
+                                className={styles.secondaryButton}
+                              >
+                                + Item
+                              </button>
 
-        <button
-          type="button"
-          disabled={tabBusy}
-          onClick={async () => {
-            try {
-              setTabBusyId(bookingKey);
+                              <button
+                                type="button"
+                                disabled={tabBusy}
+                                onClick={async () => {
+                                  try {
+                                    setTabBusyId(bookingKey);
 
-              const detail = tabDetail || (await loadTab(tab.id, bookingKey));
+                                    const detail =
+                                      tabDetail || (await loadTab(tab.id, bookingKey));
 
-              setPaymentError("");
-              setPaymentForm(
-                buildPaymentForm(bookingKey, detail.tab.id, detail.tab.balance_due)
-              );
-              setShowPaymentModal(true);
-            } catch (err: any) {
-              alert(err?.message || "Failed to open payment modal");
-            } finally {
-              setTabBusyId(null);
-            }
-          }}
-          className={styles.successButton}
-        >
-          Payment
-        </button>
+                                    setPaymentError("");
+                                    setPaymentForm(
+                                      buildPaymentForm(
+                                        bookingKey,
+                                        detail.tab.id,
+                                        detail.tab.balance_due
+                                      )
+                                    );
+                                    setShowPaymentModal(true);
+                                  } catch (err: any) {
+                                    alert(err?.message || "Failed to open payment modal");
+                                  } finally {
+                                    setTabBusyId(null);
+                                  }
+                                }}
+                                className={styles.successButton}
+                              >
+                                Payment
+                              </button>
 
-        <button
-          type="button"
-          disabled={tabBusy || tab.status !== "open"}
-          onClick={() => updateTabStatusPrompt(bookingKey, "closed")}
-          className={styles.infoButton}
-        >
-          Close Tab
-        </button>
-      </div>
-    </div>
-  );
-})}
+                              <button
+                                type="button"
+                                disabled={tabBusy || tab.status !== "open"}
+                                onClick={() => updateTabStatusPrompt(bookingKey, "closed")}
+                                className={styles.infoButton}
+                              >
+                                Close Tab
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </section>
 
       {showCreateModal ? (
         <div className={styles.modalOverlay} onClick={closeCreateModal}>
