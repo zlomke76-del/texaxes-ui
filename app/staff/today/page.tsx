@@ -301,6 +301,30 @@ type CreateTabResponse = {
   tab: TabSummaryRow;
 };
 
+type AddItemFormState = {
+  bookingKey: string;
+  tabId: string;
+  item_type: ItemType;
+  description: string;
+  quantity: number;
+  unit_price: string;
+  taxable: boolean;
+  tax_exempt_override: boolean;
+  tax_exempt_reason: string;
+  note: string;
+  size: string;
+};
+
+type PaymentFormState = {
+  bookingKey: string;
+  tabId: string;
+  amount: string;
+  payment_method: TabPaymentMethod;
+  reference: string;
+  note: string;
+  collected_by: string;
+};
+
 const OPS_API_BASE =
   process.env.NEXT_PUBLIC_TEXAXES_OPS_URL?.replace(/\/+$/, "") ||
   "https://texaxes-ops.vercel.app";
@@ -309,6 +333,55 @@ const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
+
+const ITEM_PRESETS: Array<{
+  key: string;
+  label: string;
+  item_type: ItemType;
+  description: string;
+  unit_price: number;
+  taxable: boolean;
+  defaultQuantity?: number;
+  requiresSize?: boolean;
+}> = [
+  {
+    key: "coke",
+    label: "Coke",
+    item_type: "drink",
+    description: "Coke",
+    unit_price: 3.5,
+    taxable: true,
+    defaultQuantity: 1,
+  },
+  {
+    key: "water",
+    label: "Water",
+    item_type: "drink",
+    description: "Water",
+    unit_price: 3.0,
+    taxable: false,
+    defaultQuantity: 1,
+  },
+  {
+    key: "shirt",
+    label: "Shirt",
+    item_type: "retail",
+    description: "Tex Axes Shirt",
+    unit_price: 35,
+    taxable: true,
+    defaultQuantity: 1,
+    requiresSize: true,
+  },
+  {
+    key: "axe",
+    label: "Retail Axe",
+    item_type: "axe",
+    description: "Retail Axe",
+    unit_price: 125,
+    taxable: true,
+    defaultQuantity: 1,
+  },
+];
 
 function formatMoney(value: number) {
   return money.format(Number(value || 0));
@@ -477,6 +550,42 @@ function buildTaxInternalNotes(form: CreateFormState) {
   return lines.join("\n");
 }
 
+function buildAddItemForm(
+  bookingKey: string,
+  tabId: string,
+  preset?: (typeof ITEM_PRESETS)[number]
+): AddItemFormState {
+  return {
+    bookingKey,
+    tabId,
+    item_type: preset?.item_type || "custom",
+    description: preset?.description || "",
+    quantity: preset?.defaultQuantity || 1,
+    unit_price: String(preset?.unit_price ?? ""),
+    taxable: preset?.taxable ?? true,
+    tax_exempt_override: false,
+    tax_exempt_reason: "",
+    note: "",
+    size: "",
+  };
+}
+
+function buildPaymentForm(
+  bookingKey: string,
+  tabId: string,
+  balanceDue = 0
+): PaymentFormState {
+  return {
+    bookingKey,
+    tabId,
+    amount: balanceDue > 0 ? balanceDue.toFixed(2) : "",
+    payment_method: "in_store_terminal",
+    reference: "",
+    note: "",
+    collected_by: "",
+  };
+}
+
 async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${OPS_API_BASE}${path}`, {
     ...init,
@@ -524,6 +633,16 @@ export default function StaffTodayPage() {
     null
   );
   const [openTabsLoading, setOpenTabsLoading] = useState(false);
+
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [addItemBusy, setAddItemBusy] = useState(false);
+  const [addItemError, setAddItemError] = useState("");
+  const [addItemForm, setAddItemForm] = useState<AddItemFormState | null>(null);
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const [paymentForm, setPaymentForm] = useState<PaymentFormState | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -732,7 +851,6 @@ export default function StaffTodayPage() {
     const currentNotes = row.internal_notes?.trim() || "";
     const collectLine = "Collect tax exempt form.";
     const verifiedLine = "Tax exempt form collected.";
-
     const nextNotes = currentNotes.replace(collectLine, verifiedLine).trim();
 
     await applyUpdate(row.booking_id, {
@@ -895,11 +1013,13 @@ export default function StaffTodayPage() {
         found = created.tab;
       }
 
-      await loadTab(found.id, row.booking_id);
+      const detail = await loadTab(found.id, row.booking_id);
       await loadOpenTabs("open");
       setToast("Tab ready");
+      return detail;
     } catch (err: any) {
       alert(err?.message || "Failed to open tab");
+      return null;
     } finally {
       setTabBusyId(null);
     }
@@ -961,150 +1081,168 @@ export default function StaffTodayPage() {
     }
   }
 
-  async function addItemPrompt(
-    bookingKey: string,
-    defaults?: Partial<{
-      item_type: ItemType;
-      description: string;
-      quantity: number;
-      unit_price: number;
-      taxable: boolean;
-      tax_exempt_override: boolean;
-    }>
+  async function openAddItemModalForBooking(
+    row: BookingRow,
+    preset?: (typeof ITEM_PRESETS)[number]
   ) {
-    const detail = tabDetailsByBooking[bookingKey];
+    let detail = tabDetailsByBooking[row.booking_id];
+    if (!detail) {
+      detail = await ensureBookingTab(row);
+    }
     if (!detail?.tab?.id) return;
 
-    const itemTypeInput = window.prompt(
-      "Item type (booking, drink, snack, retail, axe, custom)",
-      defaults?.item_type || "custom"
-    );
-    if (itemTypeInput === null) return;
-    const itemType = itemTypeInput.trim() as ItemType;
+    setAddItemError("");
+    setAddItemForm(buildAddItemForm(row.booking_id, detail.tab.id, preset));
+    setShowAddItemModal(true);
+  }
 
-    const description = window.prompt("Description", defaults?.description || "");
-    if (description === null || !description.trim()) return;
+  function closeAddItemModal() {
+    if (addItemBusy) return;
+    setShowAddItemModal(false);
+    setAddItemError("");
+    setAddItemForm(null);
+  }
 
-    const quantityInput = window.prompt(
-      "Quantity",
-      String(defaults?.quantity ?? 1)
-    );
-    if (quantityInput === null) return;
-    const quantity = Number(quantityInput);
+  function updateAddItemField<K extends keyof AddItemFormState>(
+    key: K,
+    value: AddItemFormState[K]
+  ) {
+    setAddItemForm((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, [key]: value };
+      if (key === "tax_exempt_override" && !value) {
+        next.tax_exempt_reason = "";
+      }
+      return next;
+    });
+  }
 
-    const unitPriceInput = window.prompt(
-      "Unit price",
-      String(defaults?.unit_price ?? 0)
-    );
-    if (unitPriceInput === null) return;
-    const unitPrice = Number(unitPriceInput);
+  async function submitAddItemModal() {
+    if (!addItemForm) return;
 
-    const taxableResponse = window.prompt(
-      "Taxable? yes / no",
-      (defaults?.taxable ?? true) ? "yes" : "no"
-    );
-    if (taxableResponse === null) return;
-    const taxable = taxableResponse.trim().toLowerCase() !== "no";
+    const quantity = Number(addItemForm.quantity);
+    const unitPrice = Number(addItemForm.unit_price);
 
-    const taxExemptOverrideResponse = window.prompt(
-      "Tax exempt override for this line? yes / no",
-      (defaults?.tax_exempt_override ?? false) ? "yes" : "no"
-    );
-    if (taxExemptOverrideResponse === null) return;
-    const taxExemptOverride =
-      taxExemptOverrideResponse.trim().toLowerCase() === "yes";
-
-    let taxExemptReason: string | null = null;
-    if (taxExemptOverride) {
-      const reason = window.prompt("Tax exempt reason for this item", "manual override");
-      if (reason === null) return;
-      taxExemptReason = reason.trim() || "manual override";
+    if (!addItemForm.description.trim()) {
+      setAddItemError("Description is required.");
+      return;
     }
 
     if (!Number.isInteger(quantity) || quantity <= 0) {
-      alert("Invalid quantity");
+      setAddItemError("Quantity must be at least 1.");
       return;
     }
 
     if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-      alert("Invalid unit price");
+      setAddItemError("Unit price must be 0 or greater.");
+      return;
+    }
+
+    if (addItemForm.tax_exempt_override && !addItemForm.tax_exempt_reason.trim()) {
+      setAddItemError("Tax exempt reason is required when override is on.");
       return;
     }
 
     try {
-      setTabBusyId(bookingKey);
+      setAddItemBusy(true);
+      setAddItemError("");
+
+      const description =
+        addItemForm.size.trim()
+          ? `${addItemForm.description.trim()} - ${addItemForm.size.trim()}`
+          : addItemForm.description.trim();
 
       await opsFetch("/api/admin/add-line-item", {
         method: "POST",
         body: JSON.stringify({
-          tab_id: detail.tab.id,
-          item_type: itemType,
-          description: description.trim(),
+          tab_id: addItemForm.tabId,
+          item_type: addItemForm.item_type,
+          description,
           quantity,
           unit_price: unitPrice,
-          taxable,
-          tax_exempt_override: taxExemptOverride,
-          tax_exempt_reason: taxExemptReason,
+          taxable: addItemForm.taxable,
+          tax_exempt_override: addItemForm.tax_exempt_override,
+          tax_exempt_reason: addItemForm.tax_exempt_override
+            ? addItemForm.tax_exempt_reason.trim()
+            : null,
+          note: addItemForm.note.trim() || null,
         }),
       });
 
-      await refreshExistingTab(bookingKey);
+      await refreshExistingTab(addItemForm.bookingKey);
+      closeAddItemModal();
       setToast("Line item added");
     } catch (err: any) {
-      alert(err?.message || "Failed to add line item");
+      setAddItemError(err?.message || "Failed to add item");
     } finally {
-      setTabBusyId(null);
+      setAddItemBusy(false);
     }
   }
 
-  async function recordPaymentPrompt(bookingKey: string) {
-    const detail = tabDetailsByBooking[bookingKey];
+  async function openPaymentModalForBooking(row: BookingRow) {
+    let detail = tabDetailsByBooking[row.booking_id];
+    if (!detail) {
+      detail = await ensureBookingTab(row);
+    }
     if (!detail?.tab?.id) return;
 
-    const amountInput = window.prompt(
-      "Payment amount",
-      String(detail.tab.balance_due || 0)
+    setPaymentError("");
+    setPaymentForm(
+      buildPaymentForm(row.booking_id, detail.tab.id, detail.tab.balance_due)
     );
-    if (amountInput === null) return;
-    const amount = Number(amountInput);
+    setShowPaymentModal(true);
+  }
+
+  function closePaymentModal() {
+    if (paymentBusy) return;
+    setShowPaymentModal(false);
+    setPaymentError("");
+    setPaymentForm(null);
+  }
+
+  function updatePaymentField<K extends keyof PaymentFormState>(
+    key: K,
+    value: PaymentFormState[K]
+  ) {
+    setPaymentForm((prev) => {
+      if (!prev) return prev;
+      return { ...prev, [key]: value };
+    });
+  }
+
+  async function submitPaymentModal() {
+    if (!paymentForm) return;
+
+    const amount = Number(paymentForm.amount);
 
     if (!Number.isFinite(amount) || amount < 0) {
-      alert("Invalid amount");
+      setPaymentError("Amount must be 0 or greater.");
       return;
     }
 
-    const paymentMethodInput = window.prompt(
-      "Payment method (online_stripe, in_store_terminal, cash, comp, manual_adjustment)",
-      "in_store_terminal"
-    );
-    if (paymentMethodInput === null) return;
-    const paymentMethod = paymentMethodInput.trim() as TabPaymentMethod;
-
-    const reference = window.prompt("Reference / receipt / last4 (optional)", "") ?? "";
-    const note = window.prompt("Payment note (optional)", "") ?? "";
-    const collectedBy = window.prompt("Collected by (optional)", "") ?? "";
-
     try {
-      setTabBusyId(bookingKey);
+      setPaymentBusy(true);
+      setPaymentError("");
 
       await opsFetch("/api/admin/add-payment", {
         method: "POST",
         body: JSON.stringify({
-          tab_id: detail.tab.id,
+          tab_id: paymentForm.tabId,
           amount,
-          payment_method: paymentMethod,
-          reference: reference.trim() || null,
-          note: note.trim() || null,
-          collected_by: collectedBy.trim() || null,
+          payment_method: paymentForm.payment_method,
+          reference: paymentForm.reference.trim() || null,
+          note: paymentForm.note.trim() || null,
+          collected_by: paymentForm.collected_by.trim() || null,
         }),
       });
 
-      await refreshExistingTab(bookingKey);
+      await refreshExistingTab(paymentForm.bookingKey);
+      closePaymentModal();
       setToast("Payment recorded");
     } catch (err: any) {
-      alert(err?.message || "Failed to record payment");
+      setPaymentError(err?.message || "Failed to record payment");
     } finally {
-      setTabBusyId(null);
+      setPaymentBusy(false);
     }
   }
 
@@ -1632,6 +1770,22 @@ export default function StaffTodayPage() {
                               >
                                 {bookingTab ? "Refresh Tab" : "Open Tab"}
                               </button>
+                              <button
+                                type="button"
+                                disabled={tabBusy}
+                                onClick={() => openAddItemModalForBooking(row, ITEM_PRESETS[0])}
+                                className={styles.secondaryButton}
+                              >
+                                + Item
+                              </button>
+                              <button
+                                type="button"
+                                disabled={tabBusy}
+                                onClick={() => openPaymentModalForBooking(row)}
+                                className={styles.successButton}
+                              >
+                                Payment
+                              </button>
                               {row.tax_exempt && taxStatus === "pending_form" ? (
                                 <button
                                   type="button"
@@ -1798,13 +1952,7 @@ export default function StaffTodayPage() {
                                       className={styles.secondaryButton}
                                       disabled={tabBusy}
                                       onClick={() =>
-                                        addItemPrompt(row.booking_id, {
-                                          item_type: "drink",
-                                          description: "Coke",
-                                          quantity: 1,
-                                          unit_price: 3.5,
-                                          taxable: true,
-                                        })
+                                        openAddItemModalForBooking(row, ITEM_PRESETS[0])
                                       }
                                     >
                                       + Coke
@@ -1813,13 +1961,7 @@ export default function StaffTodayPage() {
                                       className={styles.secondaryButton}
                                       disabled={tabBusy}
                                       onClick={() =>
-                                        addItemPrompt(row.booking_id, {
-                                          item_type: "drink",
-                                          description: "Water",
-                                          quantity: 1,
-                                          unit_price: 3.0,
-                                          taxable: false,
-                                        })
+                                        openAddItemModalForBooking(row, ITEM_PRESETS[1])
                                       }
                                     >
                                       + Water
@@ -1828,13 +1970,16 @@ export default function StaffTodayPage() {
                                       className={styles.secondaryButton}
                                       disabled={tabBusy}
                                       onClick={() =>
-                                        addItemPrompt(row.booking_id, {
-                                          item_type: "axe",
-                                          description: "Retail Axe",
-                                          quantity: 1,
-                                          unit_price: 125,
-                                          taxable: true,
-                                        })
+                                        openAddItemModalForBooking(row, ITEM_PRESETS[2])
+                                      }
+                                    >
+                                      + Shirt
+                                    </button>
+                                    <button
+                                      className={styles.secondaryButton}
+                                      disabled={tabBusy}
+                                      onClick={() =>
+                                        openAddItemModalForBooking(row, ITEM_PRESETS[3])
                                       }
                                     >
                                       + Axe
@@ -1842,14 +1987,14 @@ export default function StaffTodayPage() {
                                     <button
                                       className={styles.primaryButton}
                                       disabled={tabBusy}
-                                      onClick={() => addItemPrompt(row.booking_id)}
+                                      onClick={() => openAddItemModalForBooking(row)}
                                     >
                                       + Custom Item
                                     </button>
                                     <button
                                       className={styles.successButton}
                                       disabled={tabBusy}
-                                      onClick={() => recordPaymentPrompt(row.booking_id)}
+                                      onClick={() => openPaymentModalForBooking(row)}
                                     >
                                       Record Payment
                                     </button>
@@ -2441,6 +2586,297 @@ export default function StaffTodayPage() {
                 type="button"
                 onClick={closeCreateModal}
                 disabled={createBusy}
+                className={styles.secondaryButton}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showAddItemModal && addItemForm ? (
+        <div className={styles.modalOverlay} onClick={closeAddItemModal}>
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <div className={styles.modalKicker}>Tab Line Item</div>
+                <h2 className={styles.modalTitle}>Add Item</h2>
+                <p className={styles.modalText}>
+                  Quick-add concessions, retail, and custom charges to the live tab.
+                </p>
+              </div>
+
+              <button onClick={closeAddItemModal} className={styles.modalCloseButton}>
+                ✕
+              </button>
+            </div>
+
+            <div className={styles.filterBar}>
+              {ITEM_PRESETS.map((preset) => (
+                <button
+                  key={preset.key}
+                  type="button"
+                  className={styles.filterButton}
+                  onClick={() =>
+                    setAddItemForm(
+                      buildAddItemForm(addItemForm.bookingKey, addItemForm.tabId, preset)
+                    )
+                  }
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            <div className={styles.formGrid}>
+              <div className={styles.field}>
+                <label className={styles.label}>Item Type</label>
+                <select
+                  value={addItemForm.item_type}
+                  onChange={(e) =>
+                    updateAddItemField("item_type", e.target.value as ItemType)
+                  }
+                  className={styles.input}
+                >
+                  <option value="drink">Drink</option>
+                  <option value="snack">Snack</option>
+                  <option value="retail">Retail</option>
+                  <option value="axe">Axe</option>
+                  <option value="custom">Custom</option>
+                  <option value="booking">Booking</option>
+                </select>
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Description</label>
+                <input
+                  type="text"
+                  value={addItemForm.description}
+                  onChange={(e) => updateAddItemField("description", e.target.value)}
+                  className={styles.input}
+                  placeholder="Coke, Tex Axes Shirt, Retail Axe..."
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Quantity</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={addItemForm.quantity}
+                  onChange={(e) =>
+                    updateAddItemField(
+                      "quantity",
+                      Math.max(1, Number(e.target.value || 1))
+                    )
+                  }
+                  className={styles.input}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Unit Price</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  value={addItemForm.unit_price}
+                  onChange={(e) => updateAddItemField("unit_price", e.target.value)}
+                  className={styles.input}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Size / Variant</label>
+                <select
+                  value={addItemForm.size}
+                  onChange={(e) => updateAddItemField("size", e.target.value)}
+                  className={styles.input}
+                >
+                  <option value="">None</option>
+                  <option value="XS">XS</option>
+                  <option value="S">S</option>
+                  <option value="M">M</option>
+                  <option value="L">L</option>
+                  <option value="XL">XL</option>
+                  <option value="2XL">2XL</option>
+                  <option value="3XL">3XL</option>
+                </select>
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Note</label>
+                <input
+                  type="text"
+                  value={addItemForm.note}
+                  onChange={(e) => updateAddItemField("note", e.target.value)}
+                  className={styles.input}
+                  placeholder="Optional note"
+                />
+              </div>
+            </div>
+
+            <div className={styles.taxPanel}>
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={addItemForm.taxable}
+                  onChange={(e) => updateAddItemField("taxable", e.target.checked)}
+                />
+                <span>Taxable item</span>
+              </label>
+
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={addItemForm.tax_exempt_override}
+                  onChange={(e) =>
+                    updateAddItemField("tax_exempt_override", e.target.checked)
+                  }
+                />
+                <span>Tax exempt override for this line</span>
+              </label>
+
+              {addItemForm.tax_exempt_override ? (
+                <div className={styles.field}>
+                  <label className={styles.label}>Tax Exempt Reason</label>
+                  <input
+                    type="text"
+                    value={addItemForm.tax_exempt_reason}
+                    onChange={(e) =>
+                      updateAddItemField("tax_exempt_reason", e.target.value)
+                    }
+                    className={styles.input}
+                    placeholder="Reason for item-level exemption"
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            {addItemError ? <div className={styles.createError}>{addItemError}</div> : null}
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                onClick={submitAddItemModal}
+                disabled={addItemBusy}
+                className={styles.primaryButton}
+              >
+                Add Item
+              </button>
+
+              <button
+                type="button"
+                onClick={closeAddItemModal}
+                disabled={addItemBusy}
+                className={styles.secondaryButton}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showPaymentModal && paymentForm ? (
+        <div className={styles.modalOverlay} onClick={closePaymentModal}>
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <div className={styles.modalKicker}>Tab Payment</div>
+                <h2 className={styles.modalTitle}>Record Payment</h2>
+                <p className={styles.modalText}>
+                  Record card terminal, cash, comp, or manual adjustment payments.
+                </p>
+              </div>
+
+              <button onClick={closePaymentModal} className={styles.modalCloseButton}>
+                ✕
+              </button>
+            </div>
+
+            <div className={styles.formGrid}>
+              <div className={styles.field}>
+                <label className={styles.label}>Amount</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={paymentForm.amount}
+                  onChange={(e) => updatePaymentField("amount", e.target.value)}
+                  className={styles.input}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Payment Method</label>
+                <select
+                  value={paymentForm.payment_method}
+                  onChange={(e) =>
+                    updatePaymentField(
+                      "payment_method",
+                      e.target.value as TabPaymentMethod
+                    )
+                  }
+                  className={styles.input}
+                >
+                  <option value="in_store_terminal">In-Store Terminal</option>
+                  <option value="cash">Cash</option>
+                  <option value="online_stripe">Online Stripe</option>
+                  <option value="comp">Comp</option>
+                  <option value="manual_adjustment">Manual Adjustment</option>
+                </select>
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Reference</label>
+                <input
+                  type="text"
+                  value={paymentForm.reference}
+                  onChange={(e) => updatePaymentField("reference", e.target.value)}
+                  className={styles.input}
+                  placeholder="Receipt / last4 / terminal ref"
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Collected By</label>
+                <input
+                  type="text"
+                  value={paymentForm.collected_by}
+                  onChange={(e) => updatePaymentField("collected_by", e.target.value)}
+                  className={styles.input}
+                  placeholder="Staff name"
+                />
+              </div>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Note</label>
+              <textarea
+                value={paymentForm.note}
+                onChange={(e) => updatePaymentField("note", e.target.value)}
+                className={styles.textarea}
+              />
+            </div>
+
+            {paymentError ? <div className={styles.createError}>{paymentError}</div> : null}
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                onClick={submitPaymentModal}
+                disabled={paymentBusy}
+                className={styles.successButton}
+              >
+                Record Payment
+              </button>
+
+              <button
+                type="button"
+                onClick={closePaymentModal}
+                disabled={paymentBusy}
                 className={styles.secondaryButton}
               >
                 Cancel
