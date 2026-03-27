@@ -99,6 +99,29 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  align-items: center;
+}
+
+.dateInput,
+.input,
+.textarea {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.dateInput {
+  width: auto;
+  min-width: 165px;
+}
+
+.textarea {
+  min-height: 96px;
+  resize: vertical;
 }
 
 .messageCard {
@@ -211,7 +234,10 @@
 .warnButton,
 .infoButton,
 .dangerButton,
-.ghostButton {
+.ghostButton,
+.primaryButton,
+.modalCloseButton,
+.slotButton {
   appearance: none;
   border: 0;
   cursor: pointer;
@@ -478,7 +504,8 @@
 .warnButton,
 .infoButton,
 .dangerButton,
-.ghostButton {
+.ghostButton,
+.primaryButton {
   border-radius: 12px;
   padding: 10px 12px;
   color: #fff;
@@ -492,8 +519,19 @@
 }
 
 .secondaryButton:hover,
-.ghostButton:hover {
+.ghostButton:hover,
+.modalCloseButton:hover,
+.slotButton:hover {
   background: rgba(255, 255, 255, 0.12);
+}
+
+.primaryButton {
+  background: #f97316;
+  box-shadow: 0 12px 28px rgba(124, 45, 18, 0.3);
+}
+
+.primaryButton:hover {
+  background: #fb923c;
 }
 
 .successButton {
@@ -529,7 +567,8 @@
   background: rgba(248, 113, 113, 0.95);
 }
 
-.ghostButton {
+.ghostButton,
+.modalCloseButton {
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -593,12 +632,173 @@
   gap: 8px;
 }
 
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.76);
+  padding: 16px;
+}
+
+.modalCard {
+  width: min(980px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(251, 146, 60, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(10, 18, 31, 0.98), rgba(8, 14, 25, 0.98));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  padding: 20px;
+}
+
+.modalHeader {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.modalKicker {
+  color: #fdba74;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.modalTitle {
+  margin: 6px 0 0;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.modalText {
+  margin: 10px 0 0;
+  color: rgba(248, 250, 252, 0.66);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.modalCloseButton {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 12px;
+  color: #fff;
+}
+
+.formGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.formGridSingle {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  color: rgba(248, 250, 252, 0.74);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.slotGrid {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.slotButton {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 14px;
+  color: #fff;
+}
+
+.slotButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.slotSelected {
+  outline: 2px solid rgba(251, 146, 60, 0.9);
+  outline-offset: 0;
+}
+
+.slotAvailable {
+  border-color: rgba(74, 222, 128, 0.22);
+}
+
+.slotLimited {
+  border-color: rgba(250, 204, 21, 0.22);
+}
+
+.slotFull {
+  border-color: rgba(248, 113, 113, 0.22);
+}
+
+.slotTime {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.slotMeta,
+.slotLoading {
+  color: rgba(248, 250, 252, 0.62);
+  font-size: 13px;
+}
+
+.createError {
+  margin-top: 16px;
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 16px;
+  background: rgba(239, 68, 68, 0.12);
+  padding: 14px;
+  color: #fecaca;
+  font-size: 14px;
+}
+
+.modalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
 .secondaryButton:disabled,
 .successButton:disabled,
 .warnButton:disabled,
 .infoButton:disabled,
 .dangerButton:disabled,
-.ghostButton:disabled {
+.ghostButton:disabled,
+.primaryButton:disabled,
+.modalCloseButton:disabled,
+.slotButton:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -624,6 +824,18 @@
   .expandGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .formGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .formGridSingle {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .slotGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 1200px) {
@@ -647,5 +859,9 @@
 
   .expandGrid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .slotGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
