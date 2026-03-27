@@ -22,6 +22,8 @@ type WaiverStatus =
   | "expired"
   | "unknown";
 
+type TaxExemptStatus = "pending_form" | "verified" | "unknown";
+
 type BookingRow = {
   booking_id: string;
   customer_id: string;
@@ -44,6 +46,10 @@ type BookingRow = {
   allocation_mode: string | null;
   bays_allocated: number | null;
   created_at: string | null;
+  tax_exempt?: boolean | null;
+  tax_exempt_reason?: string | null;
+  tax_exempt_status?: TaxExemptStatus | null;
+  tax_exempt_form_collected_at?: string | null;
 };
 
 type Summary = {
@@ -69,7 +75,8 @@ type FilterKey =
   | "unpaid"
   | "checked_in"
   | "completed"
-  | "no_show";
+  | "no_show"
+  | "tax_exempt";
 
 type AvailabilitySlot = {
   time_block_id: string;
@@ -103,6 +110,9 @@ type CreateBookingPayload = {
   customer_notes?: string;
   internal_notes?: string;
   payment_status: "pending" | "paid";
+  tax_exempt?: boolean;
+  tax_exempt_reason?: string | null;
+  tax_exempt_status?: TaxExemptStatus | null;
 };
 
 type CreateBookingResponse = {
@@ -140,6 +150,10 @@ type CreateFormState = {
   booking_type: "open" | "league" | "corporate";
   customer_notes: string;
   internal_notes: string;
+  tax_exempt: boolean;
+  tax_exempt_reason: string;
+  tax_exempt_form_collected: boolean;
+  tax_exempt_note: string;
 };
 
 const OPS_API_BASE =
@@ -176,18 +190,41 @@ function shiftDate(dateString: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+function normalizeTaxExemptStatus(row: Pick<BookingRow, "tax_exempt" | "tax_exempt_status" | "internal_notes">): TaxExemptStatus | null {
+  if (!row.tax_exempt) return null;
+  if (row.tax_exempt_status === "pending_form" || row.tax_exempt_status === "verified") {
+    return row.tax_exempt_status;
+  }
+
+  const notes = (row.internal_notes || "").toLowerCase();
+  if (notes.includes("tax exempt") && notes.includes("collect tax exempt form")) {
+    return "pending_form";
+  }
+  if (notes.includes("tax exempt") && notes.includes("form collected")) {
+    return "verified";
+  }
+
+  return "unknown";
+}
+
+function formatLabel(value: string | null | undefined) {
+  return String(value || "unknown").replaceAll("_", " ");
+}
+
 function toneClass(status: string) {
   switch (status) {
     case "paid":
     case "checked_in":
     case "completed":
     case "signed":
+    case "verified":
       return styles.toneGood;
     case "pending":
     case "awaiting_payment":
     case "missing":
     case "guardian_required":
     case "confirmed":
+    case "pending_form":
       return styles.toneWarn;
     case "failed":
     case "expired":
@@ -206,21 +243,27 @@ function slotToneClass(state: AvailabilitySlot["state"]) {
 }
 
 function isAttentionBooking(row: BookingRow) {
+  const taxStatus = normalizeTaxExemptStatus(row);
+
   return (
     row.payment_status !== "paid" ||
     row.waiver_status !== "signed" ||
-    row.booking_status === "awaiting_payment"
+    row.booking_status === "awaiting_payment" ||
+    taxStatus === "pending_form"
   );
 }
 
 function getPriorityScore(row: BookingRow) {
+  const taxStatus = normalizeTaxExemptStatus(row);
+
   if (row.booking_status === "awaiting_payment") return 0;
   if (row.payment_status !== "paid") return 1;
   if (row.waiver_status !== "signed") return 2;
-  if (row.booking_status === "checked_in") return 3;
-  if (row.booking_status === "completed") return 5;
-  if (row.booking_status === "no_show") return 6;
-  return 4;
+  if (taxStatus === "pending_form") return 3;
+  if (row.booking_status === "checked_in") return 4;
+  if (row.booking_status === "completed") return 6;
+  if (row.booking_status === "no_show") return 7;
+  return 5;
 }
 
 function defaultCreateForm(): CreateFormState {
@@ -235,7 +278,37 @@ function defaultCreateForm(): CreateFormState {
     booking_type: "open",
     customer_notes: "",
     internal_notes: "",
+    tax_exempt: false,
+    tax_exempt_reason: "",
+    tax_exempt_form_collected: false,
+    tax_exempt_note: "",
   };
+}
+
+function buildTaxInternalNotes(form: CreateFormState) {
+  if (!form.tax_exempt) {
+    return form.internal_notes.trim();
+  }
+
+  const lines = [
+    "[TAX EXEMPT]",
+    form.tax_exempt_reason
+      ? `Reason: ${formatLabel(form.tax_exempt_reason)}`
+      : "Reason: not specified",
+    form.tax_exempt_form_collected
+      ? "Tax exempt form collected."
+      : "Collect tax exempt form.",
+  ];
+
+  if (form.tax_exempt_note.trim()) {
+    lines.push(`Tax note: ${form.tax_exempt_note.trim()}`);
+  }
+
+  if (form.internal_notes.trim()) {
+    lines.push(form.internal_notes.trim());
+  }
+
+  return lines.join("\n");
 }
 
 async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -332,6 +405,8 @@ export default function StaffTodayPage() {
         attentionCount: 0,
         missingWaivers: 0,
         unpaidCount: 0,
+        taxExemptCount: 0,
+        taxFormsPending: 0,
       };
     }
 
@@ -355,6 +430,10 @@ export default function StaffTodayPage() {
       attentionCount: bookings.filter(isAttentionBooking).length,
       missingWaivers: bookings.filter((row) => row.waiver_status !== "signed").length,
       unpaidCount: bookings.filter((row) => row.payment_status !== "paid").length,
+      taxExemptCount: bookings.filter((row) => !!row.tax_exempt).length,
+      taxFormsPending: bookings.filter(
+        (row) => normalizeTaxExemptStatus(row) === "pending_form"
+      ).length,
     };
   }, [data]);
 
@@ -380,6 +459,9 @@ export default function StaffTodayPage() {
     }
     if (filter === "no_show") {
       return rows.filter((row) => row.booking_status === "no_show");
+    }
+    if (filter === "tax_exempt") {
+      return rows.filter((row) => !!row.tax_exempt);
     }
     if (filter === "upcoming") {
       return rows.filter((row) =>
@@ -445,6 +527,21 @@ export default function StaffTodayPage() {
     }
   }
 
+  async function handleMarkTaxFormCollected(row: BookingRow) {
+    const currentNotes = row.internal_notes?.trim() || "";
+    const collectLine = "Collect tax exempt form.";
+    const verifiedLine = "Tax exempt form collected.";
+
+    const nextNotes = currentNotes
+      .replace(collectLine, verifiedLine)
+      .trim();
+
+    await applyUpdate(row.booking_id, {
+      tax_exempt_status: "verified",
+      internal_notes: nextNotes,
+    });
+  }
+
   function handleOpenWaiver(row: BookingRow) {
     window.open(row.waiver_url, "_blank", "noopener,noreferrer");
   }
@@ -466,16 +563,41 @@ export default function StaffTodayPage() {
     key: K,
     value: CreateFormState[K]
   ) {
-    setCreateForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+    setCreateForm((prev) => {
+      const next = {
+        ...prev,
+        [key]: value,
+      };
+
+      if (key === "tax_exempt" && !value) {
+        next.tax_exempt_reason = "";
+        next.tax_exempt_form_collected = false;
+        next.tax_exempt_note = "";
+      }
+
+      return next;
+    });
   }
 
   async function submitCreateBooking(payment_status: "pending" | "paid") {
     try {
       setCreateBusy(true);
       setCreateError("");
+
+      if (!createForm.time) {
+        setCreateError("Select a time slot before creating the booking.");
+        return;
+      }
+
+      if (!createForm.first_name.trim() || !createForm.last_name.trim()) {
+        setCreateError("First and last name are required.");
+        return;
+      }
+
+      if (createForm.tax_exempt && !createForm.tax_exempt_reason) {
+        setCreateError("Select a tax exempt reason.");
+        return;
+      }
 
       const payload: CreateBookingPayload = {
         date: selectedDate,
@@ -490,8 +612,17 @@ export default function StaffTodayPage() {
         booking_source: createForm.booking_source,
         booking_type: createForm.booking_type,
         customer_notes: createForm.customer_notes || "",
-        internal_notes: createForm.internal_notes || "",
+        internal_notes: buildTaxInternalNotes(createForm),
         payment_status,
+        tax_exempt: createForm.tax_exempt,
+        tax_exempt_reason: createForm.tax_exempt
+          ? createForm.tax_exempt_reason
+          : null,
+        tax_exempt_status: createForm.tax_exempt
+          ? createForm.tax_exempt_form_collected
+            ? "verified"
+            : "pending_form"
+          : null,
       };
 
       const created = await opsFetch<CreateBookingResponse>("/api/admin/create-booking", {
@@ -535,7 +666,9 @@ export default function StaffTodayPage() {
                 </p>
                 <div className={styles.metaRow}>
                   <span className={styles.metaPill}>Connected: {OPS_API_BASE}</span>
-                  <span className={styles.metaPill}>Selected Date: {data?.date || selectedDate}</span>
+                  <span className={styles.metaPill}>
+                    Selected Date: {data?.date || selectedDate}
+                  </span>
                 </div>
               </div>
 
@@ -601,6 +734,9 @@ export default function StaffTodayPage() {
                     <span className={styles.attentionPill}>
                       Waivers pending: {derived.missingWaivers}
                     </span>
+                    <span className={styles.attentionPill}>
+                      Tax forms pending: {derived.taxFormsPending}
+                    </span>
                   </div>
                 </section>
               ) : null}
@@ -614,7 +750,7 @@ export default function StaffTodayPage() {
                   label="% Collected"
                   value={`${Math.round(derived.percentCollected)}%`}
                 />
-                <StatCard label="Attention" value={String(derived.attentionCount)} />
+                <StatCard label="Tax Exempt" value={String(derived.taxExemptCount)} />
               </section>
 
               <section className={styles.filterBar}>
@@ -627,6 +763,7 @@ export default function StaffTodayPage() {
                     ["checked_in", "Checked In"],
                     ["completed", "Completed"],
                     ["no_show", "No Show"],
+                    ["tax_exempt", "Tax Exempt"],
                   ] as Array<[FilterKey, string]>
                 ).map(([key, label]) => {
                   const active = filter === key;
@@ -666,6 +803,7 @@ export default function StaffTodayPage() {
                   filteredBookings.map((row) => {
                     const isExpanded = expanded === row.booking_id;
                     const busy = busyId === row.booking_id;
+                    const taxStatus = normalizeTaxExemptStatus(row);
 
                     const boardDate = data?.date || selectedDate;
                     const now = new Date();
@@ -748,6 +886,11 @@ export default function StaffTodayPage() {
                               Bays: {row.bays_allocated ?? "-"} ·{" "}
                               {(row.allocation_mode || "-").replaceAll("_", " ")}
                             </div>
+                            {row.tax_exempt ? (
+                              <div className={styles.detailMuted}>
+                                Tax reason: {formatLabel(row.tax_exempt_reason)}
+                              </div>
+                            ) : null}
                           </div>
 
                           <div>
@@ -781,6 +924,22 @@ export default function StaffTodayPage() {
                               label={row.waiver_status}
                               className={toneClass(row.waiver_status)}
                             />
+                            {row.tax_exempt ? (
+                              <StatusPill
+                                label="tax_exempt"
+                                className={styles.taxExemptPill}
+                              />
+                            ) : null}
+                            {taxStatus ? (
+                              <StatusPill
+                                label={
+                                  taxStatus === "pending_form"
+                                    ? "form_required"
+                                    : "form_verified"
+                                }
+                                className={toneClass(taxStatus)}
+                              />
+                            ) : null}
                           </div>
 
                           <div className={styles.actionStack}>
@@ -877,6 +1036,16 @@ export default function StaffTodayPage() {
                               >
                                 Copy Link
                               </button>
+                              {row.tax_exempt && taxStatus === "pending_form" ? (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => handleMarkTaxFormCollected(row)}
+                                  className={styles.taxButton}
+                                >
+                                  Mark Form Collected
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -902,6 +1071,20 @@ export default function StaffTodayPage() {
                                     Number(row.total_amount || 0) - Number(row.amount_paid || 0)
                                   )
                                 )}`}
+                              />
+                              <DetailBox
+                                title="Tax Handling"
+                                value={
+                                  row.tax_exempt
+                                    ? `Tax Exempt: Yes\nReason: ${formatLabel(
+                                        row.tax_exempt_reason
+                                      )}\nForm Status: ${formatLabel(
+                                        taxStatus || "unknown"
+                                      )}\nCollected At: ${
+                                        row.tax_exempt_form_collected_at || "Not recorded"
+                                      }`
+                                    : "Tax Exempt: No"
+                                }
                               />
                               <div className={styles.detailBox}>
                                 <div className={styles.detailTitle}>Waiver + Quick Adjust</div>
@@ -955,6 +1138,14 @@ export default function StaffTodayPage() {
                                   >
                                     Edit Notes
                                   </button>
+                                  {row.tax_exempt && taxStatus === "pending_form" ? (
+                                    <button
+                                      onClick={() => handleMarkTaxFormCollected(row)}
+                                      className={styles.taxButton}
+                                    >
+                                      Mark Form Collected
+                                    </button>
+                                  ) : null}
                                 </div>
                               </div>
                             </div>
@@ -1087,6 +1278,83 @@ export default function StaffTodayPage() {
                   <option value="corporate">Corporate</option>
                   <option value="league">League</option>
                 </select>
+              </div>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Tax Handling</label>
+
+              <div className={styles.taxPanel}>
+                <label className={styles.checkboxRow}>
+                  <input
+                    type="checkbox"
+                    checked={createForm.tax_exempt}
+                    onChange={(e) =>
+                      updateCreateField("tax_exempt", e.target.checked)
+                    }
+                  />
+                  <span>Tax Exempt</span>
+                </label>
+
+                {createForm.tax_exempt ? (
+                  <div className={styles.taxGrid}>
+                    <div className={styles.field}>
+                      <label className={styles.label}>Tax Exempt Reason</label>
+                      <select
+                        value={createForm.tax_exempt_reason}
+                        onChange={(e) =>
+                          updateCreateField("tax_exempt_reason", e.target.value)
+                        }
+                        className={styles.input}
+                      >
+                        <option value="">Select reason</option>
+                        <option value="nonprofit">Nonprofit</option>
+                        <option value="school_government">School / Government</option>
+                        <option value="resale">Resale</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label}>Tax Exempt Note</label>
+                      <input
+                        type="text"
+                        value={createForm.tax_exempt_note}
+                        onChange={(e) =>
+                          updateCreateField("tax_exempt_note", e.target.value)
+                        }
+                        className={styles.input}
+                        placeholder="Optional certificate or note"
+                      />
+                    </div>
+
+                    <div className={styles.taxChecklist}>
+                      <label className={styles.checkboxRow}>
+                        <input
+                          type="checkbox"
+                          checked={createForm.tax_exempt_form_collected}
+                          onChange={(e) =>
+                            updateCreateField(
+                              "tax_exempt_form_collected",
+                              e.target.checked
+                            )
+                          }
+                        />
+                        <span>Form collected</span>
+                      </label>
+
+                      {!createForm.tax_exempt_form_collected ? (
+                        <div className={styles.taxWarning}>
+                          Tax exempt form must be collected and tracked on this booking.
+                        </div>
+                      ) : (
+                        <div className={styles.taxVerified}>
+                          Tax exempt form marked as collected.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
