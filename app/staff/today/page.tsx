@@ -25,10 +25,8 @@ import {
   deriveMetrics,
   getPriorityScore,
   isAttentionBooking,
-  toneClass,
 } from "./lib/booking-logic";
 import {
-  formatDateTime,
   formatLabel,
   formatMoney,
   getLocalDateInputValue,
@@ -38,11 +36,11 @@ import { CreateBookingModal } from "./components/CreateBookingModal";
 import { AddItemModal } from "./components/AddItemModal";
 import { PaymentModal } from "./components/PaymentModal";
 import { StatCard } from "./components/StatCard";
-import { StatusPill } from "./components/StatusPill";
-import { BookingRow as BookingRowComponent } from "./components/BookingRow";
+import { BookingRow } from "./components/BookingRow";
+import { OpenTabsSnapshot } from "./components/OpenTabsSnapshot";
 import type {
   AddItemFormState,
-  BookingRow,
+  BookingRow as BookingRowType,
   CreateBookingPayload,
   CreateFormState,
   FilterKey,
@@ -194,7 +192,7 @@ export default function StaffTodayPage() {
     }
   }
 
-  async function handleEditNotes(row: BookingRow) {
+  async function handleEditNotes(row: BookingRowType) {
     const next = window.prompt(
       "Update internal notes",
       row.internal_notes || row.customer_notes || ""
@@ -203,7 +201,7 @@ export default function StaffTodayPage() {
     await applyUpdate(row.booking_id, { internal_notes: next });
   }
 
-  async function handleEditPartySize(row: BookingRow) {
+  async function handleEditPartySize(row: BookingRowType) {
     const next = window.prompt("Update party size", String(row.party_size || 1));
     if (next === null) return;
 
@@ -216,7 +214,7 @@ export default function StaffTodayPage() {
     await applyUpdate(row.booking_id, { party_size: size });
   }
 
-  async function handleCopyWaiverLink(row: BookingRow) {
+  async function handleCopyWaiverLink(row: BookingRowType) {
     try {
       await navigator.clipboard.writeText(row.waiver_url);
       setToast("Waiver link copied");
@@ -225,7 +223,7 @@ export default function StaffTodayPage() {
     }
   }
 
-  async function handleMarkTaxFormCollected(row: BookingRow) {
+  async function handleMarkTaxFormCollected(row: BookingRowType) {
     const currentNotes = row.internal_notes?.trim() || "";
     const collectLine = "Collect tax exempt form.";
     const verifiedLine = "Tax exempt form collected.";
@@ -237,7 +235,7 @@ export default function StaffTodayPage() {
     });
   }
 
-  function handleOpenWaiver(row: BookingRow) {
+  function handleOpenWaiver(row: BookingRowType) {
     window.open(row.waiver_url, "_blank", "noopener,noreferrer");
   }
 
@@ -355,7 +353,7 @@ export default function StaffTodayPage() {
     return detail;
   }
 
-  async function ensureBookingTab(row: BookingRow) {
+  async function ensureBookingTab(row: BookingRowType) {
     try {
       setTabBusyId(row.booking_id);
 
@@ -440,7 +438,7 @@ export default function StaffTodayPage() {
   }
 
   async function openAddItemModalForBooking(
-    row: BookingRow,
+    row: BookingRowType,
     preset?: (typeof ITEM_PRESETS)[number]
   ) {
     let detail = tabDetailsByBooking[row.booking_id];
@@ -540,7 +538,7 @@ export default function StaffTodayPage() {
     }
   }
 
-  async function openPaymentModalForBooking(row: BookingRow) {
+  async function openPaymentModalForBooking(row: BookingRowType) {
     let detail = tabDetailsByBooking[row.booking_id];
     if (!detail) {
       detail = await ensureBookingTab(row);
@@ -689,9 +687,9 @@ export default function StaffTodayPage() {
                 <div className={styles.kicker}>Tex Axes Staff Board</div>
                 <h1 className={styles.title}>Operations Board</h1>
                 <p className={styles.subtitle}>
-                  Live front-desk command surface for today, tomorrow, and future bookings.
-                  Staff can review, adjust, create bookings, drive waiver completion, and
-                  manage live tabs and payments.
+                  Live front-desk command surface for today, tomorrow, and future
+                  bookings. Staff can review, adjust, create bookings, drive waiver
+                  completion, and manage live tabs and payments.
                 </p>
                 <div className={styles.metaRow}>
                   <span className={styles.metaPill}>Connected: {OPS_API_BASE}</span>
@@ -783,7 +781,9 @@ export default function StaffTodayPage() {
                     </div>
                   </div>
                   <div className={styles.attentionMetrics}>
-                    <span className={styles.attentionPill}>Unpaid: {derived.unpaidCount}</span>
+                    <span className={styles.attentionPill}>
+                      Unpaid: {derived.unpaidCount}
+                    </span>
                     <span className={styles.attentionPill}>
                       Waivers pending: {derived.missingWaivers}
                     </span>
@@ -844,7 +844,7 @@ export default function StaffTodayPage() {
                   </div>
                 ) : (
                   filteredBookings.map((row) => (
-                    <BookingRowComponent
+                    <BookingRow
                       key={row.booking_id}
                       row={row}
                       expanded={expanded === row.booking_id}
@@ -903,201 +903,68 @@ export default function StaffTodayPage() {
                       onVoidLineItem={(lineItemId) =>
                         voidLineItem(row.booking_id, lineItemId)
                       }
-                      onVoidPayment={(paymentId) =>
-                        voidPayment(row.booking_id, paymentId)
-                      }
+                      onVoidPayment={(paymentId) => voidPayment(row.booking_id, paymentId)}
                     />
                   ))
                 )}
               </section>
 
-              <section className={styles.openTabsPanel}>
-                <div className={styles.openTabsHeader}>
-                  <div>
-                    <div className={styles.detailTitle}>Open Tabs Snapshot</div>
-                    <h2 className={styles.openTabsTitle}>Floor Commerce</h2>
-                  </div>
-                  <div className={styles.openTabsActions}>
-                    <button
-                      className={styles.secondaryButton}
-                      onClick={() => loadOpenTabs("open")}
-                      disabled={openTabsLoading}
-                    >
-                      Refresh Open Tabs
-                    </button>
-                  </div>
-                </div>
-
-                {openTabsLoading ? (
-                  <div className={styles.messageCard}>Loading open tabs...</div>
-                ) : !openTabsSummary || openTabsSummary.tabs.length === 0 ? (
-                  <div className={styles.emptyMini}>No open tabs right now.</div>
-                ) : (
-                  <>
-                    <div className={styles.openTabsStats}>
-                      <div className={styles.tabMetricCard}>
-                        <div className={styles.statLabel}>Open Tabs</div>
-                        <div className={styles.tabMetricValue}>
-                          {openTabsSummary.summary.open_count}
-                        </div>
-                      </div>
-                      <div className={styles.tabMetricCard}>
-                        <div className={styles.statLabel}>Open Tab Total</div>
-                        <div className={styles.tabMetricValue}>
-                          {formatMoney(openTabsSummary.summary.total_grand_total)}
-                        </div>
-                      </div>
-                      <div className={styles.tabMetricCard}>
-                        <div className={styles.statLabel}>Collected</div>
-                        <div className={styles.tabMetricValue}>
-                          {formatMoney(openTabsSummary.summary.total_amount_paid)}
-                        </div>
-                      </div>
-                      <div className={styles.tabMetricCard}>
-                        <div className={styles.statLabel}>Balance Due</div>
-                        <div className={styles.tabMetricValue}>
-                          {formatMoney(openTabsSummary.summary.total_balance_due)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className={styles.openTabsList}>
-                      {openTabsSummary.tabs.map((tab) => {
-                        const bookingKey = tab.booking_id || tab.id;
-                        const tabDetail = tabDetailsByBooking[bookingKey];
-                        const tabBusy = tabBusyId === bookingKey;
-
-                        return (
-                          <div key={tab.id} className={styles.openTabCard}>
-                            <div className={styles.openTabTop}>
-                              <div>
-                                <div className={styles.customerName}>
-                                  {tab.party_name ||
-                                    tab.customer?.full_name ||
-                                    `${formatLabel(tab.tab_type)} tab`}
-                                </div>
-                                <div className={styles.detailMuted}>
-                                  {formatLabel(tab.tab_type)} · party of {tab.party_size}
-                                </div>
-                                <div className={styles.detailMuted}>
-                                  Opened {formatDateTime(tab.opened_at)}
-                                </div>
-                              </div>
-                              <div className={styles.statusGroup}>
-                                <StatusPill
-                                  label={tab.status}
-                                  className={toneClass(tab.status)}
-                                />
-                              </div>
-                            </div>
-
-                            <div className={styles.openTabMetrics}>
-                              <span className={styles.attentionPill}>
-                                Total {formatMoney(tab.grand_total)}
-                              </span>
-                              <span className={styles.attentionPill}>
-                                Paid {formatMoney(tab.amount_paid)}
-                              </span>
-                              <span className={styles.attentionPill}>
-                                Balance {formatMoney(tab.balance_due)}
-                              </span>
-                            </div>
-
-                            <div className={styles.openTabMeta}>
-                              {tab.booking_id ? (
-                                <span className={styles.codeText}>Booking: {tab.booking_id}</span>
-                              ) : (
-                                <span className={styles.codeText}>Standalone tab</span>
-                              )}
-                            </div>
-
-                            <div className={styles.actionGroup}>
-                              <button
-                                type="button"
-                                disabled={tabBusy}
-                                onClick={async () => {
-                                  try {
-                                    setTabBusyId(bookingKey);
-                                    await loadTab(tab.id, bookingKey);
-                                    setExpanded(bookingKey);
-                                    setToast("Tab loaded");
-                                  } catch (err: any) {
-                                    alert(err?.message || "Failed to load tab");
-                                  } finally {
-                                    setTabBusyId(null);
-                                  }
-                                }}
-                                className={styles.primaryButton}
-                              >
-                                {tabDetail ? "Refresh Tab" : "Open Tab"}
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={tabBusy}
-                                onClick={async () => {
-                                  try {
-                                    setTabBusyId(bookingKey);
-                                    const detail = tabDetail || (await loadTab(tab.id, bookingKey));
-                                    setAddItemError("");
-                                    setAddItemForm(
-                                      buildAddItemForm(bookingKey, detail.tab.id, ITEM_PRESETS[0])
-                                    );
-                                    setShowAddItemModal(true);
-                                  } catch (err: any) {
-                                    alert(err?.message || "Failed to open item modal");
-                                  } finally {
-                                    setTabBusyId(null);
-                                  }
-                                }}
-                                className={styles.secondaryButton}
-                              >
-                                + Item
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={tabBusy}
-                                onClick={async () => {
-                                  try {
-                                    setTabBusyId(bookingKey);
-                                    const detail = tabDetail || (await loadTab(tab.id, bookingKey));
-                                    setPaymentError("");
-                                    setPaymentForm(
-                                      buildPaymentForm(
-                                        bookingKey,
-                                        detail.tab.id,
-                                        detail.tab.balance_due
-                                      )
-                                    );
-                                    setShowPaymentModal(true);
-                                  } catch (err: any) {
-                                    alert(err?.message || "Failed to open payment modal");
-                                  } finally {
-                                    setTabBusyId(null);
-                                  }
-                                }}
-                                className={styles.successButton}
-                              >
-                                Payment
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={tabBusy || tab.status !== "open"}
-                                onClick={() => updateTabStatusPrompt(bookingKey, "closed")}
-                                className={styles.infoButton}
-                              >
-                                Close Tab
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </section>
+              <OpenTabsSnapshot
+                openTabsSummary={openTabsSummary}
+                openTabsLoading={openTabsLoading}
+                tabDetailsByBooking={tabDetailsByBooking}
+                tabBusyId={tabBusyId}
+                onRefreshOpenTabs={() => loadOpenTabs("open")}
+                onOpenTab={async (tabId, bookingKey) => {
+                  try {
+                    setTabBusyId(bookingKey);
+                    await loadTab(tabId, bookingKey);
+                    setExpanded(bookingKey);
+                    setToast("Tab loaded");
+                  } catch (err: any) {
+                    alert(err?.message || "Failed to load tab");
+                  } finally {
+                    setTabBusyId(null);
+                  }
+                }}
+                onAddItem={async (tabId, bookingKey) => {
+                  try {
+                    setTabBusyId(bookingKey);
+                    const tabDetail =
+                      tabDetailsByBooking[bookingKey] || (await loadTab(tabId, bookingKey));
+                    setAddItemError("");
+                    setAddItemForm(
+                      buildAddItemForm(bookingKey, tabDetail.tab.id, ITEM_PRESETS[0])
+                    );
+                    setShowAddItemModal(true);
+                  } catch (err: any) {
+                    alert(err?.message || "Failed to open item modal");
+                  } finally {
+                    setTabBusyId(null);
+                  }
+                }}
+                onPayment={async (tabId, bookingKey) => {
+                  try {
+                    setTabBusyId(bookingKey);
+                    const tabDetail =
+                      tabDetailsByBooking[bookingKey] || (await loadTab(tabId, bookingKey));
+                    setPaymentError("");
+                    setPaymentForm(
+                      buildPaymentForm(
+                        bookingKey,
+                        tabDetail.tab.id,
+                        tabDetail.tab.balance_due
+                      )
+                    );
+                    setShowPaymentModal(true);
+                  } catch (err: any) {
+                    alert(err?.message || "Failed to open payment modal");
+                  } finally {
+                    setTabBusyId(null);
+                  }
+                }}
+                onCloseTab={(bookingKey) => updateTabStatusPrompt(bookingKey, "closed")}
+              />
             </>
           )}
         </div>
