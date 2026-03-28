@@ -1,257 +1,133 @@
 "use client";
 
 import styles from "../page.module.css";
-import {
-  getBookingTimingState,
-  isAttentionBooking,
-  normalizeTaxExemptStatus,
-  toneClass,
-} from "../lib/booking-logic";
-import { formatLabel, formatMoney, formatTime } from "../lib/format";
-import { StatusPill } from "./StatusPill";
-import { BookingExpandedPanel } from "./BookingExpandedPanel";
-import type { BookingRow as BookingRowType, TabDetailResponse } from "../types";
+import { formatLabel, formatMoney } from "../lib/format";
+import { DetailBox } from "./DetailBox";
+import { TabPanel } from "./TabPanel";
+import { ITEM_PRESETS } from "../constants";
+import type { BookingRow, TabDetailResponse } from "../types";
 
 type Props = {
-  row: BookingRowType;
-  expanded: boolean;
-  toggleExpand: () => void;
-  busy: boolean;
-  tabBusy: boolean;
+  row: BookingRow;
+  taxStatus: string | null;
   bookingTab: TabDetailResponse | null | undefined;
-  boardDate: string;
-  onMarkPaid: () => void;
-  onMarkUnpaid: () => void;
-  onCheckIn: () => void;
-  onComplete: () => void;
-  onNoShow: () => void;
+  tabBusy: boolean;
   onOpenWaiver: () => void;
   onCopyWaiver: () => void;
-  onEnsureTab: () => void;
-  onAddItem: () => void;
-  onPayment: () => void;
   onEditPartySize: () => void;
   onEditNotes: () => void;
+  onEnsureTab: () => void;
   onMarkTaxCollected: () => void;
+  onRefreshTab?: () => void;
+  onAddPresetItem?: (preset: (typeof ITEM_PRESETS)[number]) => void;
+  onAddCustomItem?: () => void;
+  onRecordPayment?: () => void;
+  onCloseTab?: () => void;
+  onVoidTab?: () => void;
+  onVoidLineItem?: (lineItemId: string) => void;
+  onVoidPayment?: (paymentId: string) => void;
 };
 
-export function BookingRow({
+export function BookingExpandedPanel({
   row,
-  expanded,
-  toggleExpand,
-  busy,
-  tabBusy,
+  taxStatus,
   bookingTab,
-  boardDate,
-  onMarkPaid,
-  onMarkUnpaid,
-  onCheckIn,
-  onComplete,
-  onNoShow,
+  tabBusy,
   onOpenWaiver,
   onCopyWaiver,
-  onEnsureTab,
-  onAddItem,
-  onPayment,
   onEditPartySize,
   onEditNotes,
+  onEnsureTab,
   onMarkTaxCollected,
+  onRefreshTab,
+  onAddPresetItem,
+  onAddCustomItem,
+  onRecordPayment,
+  onCloseTab,
+  onVoidTab,
+  onVoidLineItem,
+  onVoidPayment,
 }: Props) {
-  const taxStatus = normalizeTaxExemptStatus(row);
-  const { urgent, late } = getBookingTimingState(row, boardDate);
-  const attention = isAttentionBooking(row);
-
-  const rowClassName = [
-    styles.row,
-    late ? styles.rowLate : "",
-    urgent ? styles.rowUrgent : "",
-    attention ? styles.rowAttention : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
   return (
-    <div className={rowClassName}>
-      <div className={styles.rowGrid}>
-        <div>
-          <div className={styles.timePrimary}>{formatTime(row.start_time)}</div>
-          <div className={styles.timeSecondary}>{formatTime(row.end_time)}</div>
-          {late ? (
-            <div className={styles.lateLabel}>Past due check-in</div>
-          ) : urgent ? (
-            <div className={styles.urgentLabel}>Starting now</div>
-          ) : null}
-        </div>
+    <div className={styles.expandPanel}>
+      <div className={styles.expandGrid}>
+        <DetailBox title="Customer Notes" value={row.customer_notes || "None"} />
+        <DetailBox title="Internal Notes" value={row.internal_notes || "None"} />
+        <DetailBox
+          title="Payment Snapshot"
+          value={`Status: ${row.payment_status}\nDue: ${formatMoney(
+            row.total_amount
+          )}\nPaid: ${formatMoney(row.amount_paid)}\nOutstanding: ${formatMoney(
+            Math.max(0, Number(row.total_amount || 0) - Number(row.amount_paid || 0))
+          )}`}
+        />
+        <DetailBox
+          title="Tax Handling"
+          value={
+            row.tax_exempt
+              ? `Tax Exempt: Yes\nReason: ${formatLabel(
+                  row.tax_exempt_reason
+                )}\nForm Status: ${formatLabel(
+                  taxStatus || "unknown"
+                )}\nCollected At: ${row.tax_exempt_form_collected_at || "Not recorded"}`
+              : "Tax Exempt: No"
+          }
+        />
 
-        <div>
-          <div className={styles.customerRow}>
-            <div className={styles.customerName}>{row.customer_name}</div>
-            {attention ? (
-              <span className={styles.attentionTag}>Needs attention</span>
-            ) : null}
-          </div>
+        <div className={styles.detailBox}>
+          <div className={styles.detailTitle}>Waiver + Quick Adjust</div>
 
-          <div className={styles.contactBlock}>
-            {row.email ? (
-              <a href={`mailto:${row.email}`} className={styles.contactLink}>
-                {row.email}
-              </a>
-            ) : (
-              <div className={styles.contactMuted}>No email</div>
-            )}
-
-            {row.phone ? (
-              <a href={`tel:${row.phone}`} className={styles.contactLinkMuted}>
-                {row.phone}
-              </a>
-            ) : (
-              <div className={styles.contactMuted}>No phone</div>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <div className={styles.detailStrong}>Party of {row.party_size}</div>
-          <div className={styles.detailMuted}>
-            Waivers: {row.waiver_signed ?? 0} / {row.waiver_required ?? row.party_size}
-          </div>
-          <div className={styles.detailMuted}>
-            {(row.booking_type || "open").replaceAll("_", " ")} ·{" "}
-            {(row.booking_source || "unknown").replaceAll("_", " ")}
-          </div>
-          <div className={styles.detailMuted}>
-            Bays: {row.bays_allocated ?? "-"} ·{" "}
-            {(row.allocation_mode || "-").replaceAll("_", " ")}
-          </div>
-          {row.tax_exempt ? (
-            <div className={styles.detailMuted}>
-              Tax reason: {formatLabel(row.tax_exempt_reason)}
+          <div className={styles.quickInfo}>
+            <div>
+              Waiver:{" "}
+              <span className={styles.quickStrong}>
+                {row.waiver_status.replaceAll("_", " ")}
+              </span>
             </div>
-          ) : null}
-          {bookingTab ? (
-            <div className={styles.detailMuted}>
-              Tab: {formatMoney(bookingTab.tab.grand_total)} · Balance{" "}
-              {formatMoney(bookingTab.tab.balance_due)}
+            <div>
+              Signed:{" "}
+              <span className={styles.quickStrong}>
+                {row.waiver_signed ?? 0} / {row.waiver_required ?? row.party_size}
+              </span>
             </div>
-          ) : null}
-        </div>
-
-        <div>
-          <StatusPill
-            label={row.payment_status}
-            className={toneClass(row.payment_status)}
-          />
-          <div className={styles.paymentStrong}>Due: {formatMoney(row.total_amount)}</div>
-          <div className={styles.paymentMuted}>Paid: {formatMoney(row.amount_paid)}</div>
-          <div className={styles.paymentStrong}>
-            Outstanding:{" "}
-            {formatMoney(
-              Math.max(0, Number(row.total_amount || 0) - Number(row.amount_paid || 0))
-            )}
-          </div>
-        </div>
-
-        <div className={styles.statusGroup}>
-          <StatusPill
-            label={row.booking_status}
-            className={toneClass(row.booking_status)}
-          />
-          <StatusPill
-            label={row.waiver_status}
-            className={toneClass(row.waiver_status)}
-          />
-          {row.tax_exempt ? (
-            <StatusPill label="tax_exempt" className={styles.taxExemptPill} />
-          ) : null}
-          {taxStatus ? (
-            <StatusPill
-              label={taxStatus === "pending_form" ? "form_required" : "form_verified"}
-              className={toneClass(taxStatus)}
-            />
-          ) : null}
-          {bookingTab ? (
-            <StatusPill
-              label={`tab_${bookingTab.tab.status}`}
-              className={toneClass(bookingTab.tab.status)}
-            />
-          ) : null}
-        </div>
-
-        <div className={styles.actionStack}>
-          <div className={styles.actionGroup}>
-            <button disabled={busy} onClick={onMarkPaid} className={styles.successButton}>
-              Mark Paid
-            </button>
-
-            <button disabled={busy} onClick={onMarkUnpaid} className={styles.warnButton}>
-              Mark Unpaid
-            </button>
+            <div>
+              Booking ID: <span className={styles.codeText}>{row.booking_id}</span>
+            </div>
+            <div className={styles.waiverUrlBlock}>
+              <span className={styles.quickStrong}>Waiver URL:</span>
+              <a
+                href={row.waiver_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.waiverLink}
+              >
+                {row.waiver_url}
+              </a>
+            </div>
           </div>
 
-          <div className={styles.actionGroup}>
-            <button disabled={busy} onClick={onCheckIn} className={styles.infoButton}>
-              Check In
-            </button>
-
-            <button disabled={busy} onClick={onComplete} className={styles.ghostButton}>
-              Complete
-            </button>
-
-            <button disabled={busy} onClick={onNoShow} className={styles.dangerButton}>
-              No Show
-            </button>
-
-            <button
-              disabled={busy}
-              onClick={toggleExpand}
-              className={styles.secondaryButton}
-            >
-              {expanded ? "Hide" : "Details"}
-            </button>
-          </div>
-
-          <div className={styles.actionGroup}>
-            <button type="button" onClick={onOpenWaiver} className={styles.waiverButton}>
+          <div className={styles.quickActions}>
+            <button onClick={onOpenWaiver} className={styles.waiverButton}>
               Open Waiver
             </button>
-            <button
-              type="button"
-              onClick={onCopyWaiver}
-              className={styles.secondaryButton}
-            >
-              Copy Link
+            <button onClick={onCopyWaiver} className={styles.ghostButton}>
+              Copy Waiver Link
+            </button>
+            <button onClick={onEditPartySize} className={styles.ghostButton}>
+              Edit Party Size
+            </button>
+            <button onClick={onEditNotes} className={styles.ghostButton}>
+              Edit Notes
             </button>
             <button
-              type="button"
-              disabled={tabBusy}
               onClick={onEnsureTab}
+              disabled={tabBusy}
               className={styles.primaryButton}
             >
               {bookingTab ? "Refresh Tab" : "Open Tab"}
             </button>
-            <button
-              type="button"
-              disabled={tabBusy}
-              onClick={onAddItem}
-              className={styles.secondaryButton}
-            >
-              + Item
-            </button>
-            <button
-              type="button"
-              disabled={tabBusy}
-              onClick={onPayment}
-              className={styles.successButton}
-            >
-              Payment
-            </button>
             {row.tax_exempt && taxStatus === "pending_form" ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onMarkTaxCollected}
-                className={styles.taxButton}
-              >
+              <button onClick={onMarkTaxCollected} className={styles.taxButton}>
                 Mark Form Collected
               </button>
             ) : null}
@@ -259,20 +135,36 @@ export function BookingRow({
         </div>
       </div>
 
-      {expanded ? (
-        <BookingExpandedPanel
+      {bookingTab ? (
+        <TabPanel
           row={row}
-          taxStatus={taxStatus}
           bookingTab={bookingTab}
           tabBusy={tabBusy}
-          onOpenWaiver={onOpenWaiver}
-          onCopyWaiver={onCopyWaiver}
-          onEditPartySize={onEditPartySize}
-          onEditNotes={onEditNotes}
-          onEnsureTab={onEnsureTab}
-          onMarkTaxCollected={onMarkTaxCollected}
+          onRefreshTab={onRefreshTab || (() => {})}
+          onAddPresetItem={onAddPresetItem || (() => {})}
+          onAddCustomItem={onAddCustomItem || (() => {})}
+          onRecordPayment={onRecordPayment || (() => {})}
+          onCloseTab={onCloseTab || (() => {})}
+          onVoidTab={onVoidTab || (() => {})}
+          onVoidLineItem={onVoidLineItem || (() => {})}
+          onVoidPayment={onVoidPayment || (() => {})}
         />
-      ) : null}
+      ) : (
+        <div className={styles.tabPanelPlaceholder}>
+          <div className={styles.detailTitle}>Tab / Invoice</div>
+          <p className={styles.emptyText}>
+            Open a tab to add drinks, retail, custom charges, and in-store payments
+            against this booking.
+          </p>
+          <button
+            className={styles.primaryButton}
+            disabled={tabBusy}
+            onClick={onEnsureTab}
+          >
+            Open Tab
+          </button>
+        </div>
+      )}
     </div>
   );
 }
