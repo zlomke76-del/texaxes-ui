@@ -894,6 +894,18 @@ export default function StaffTodayPage() {
                       onEditPartySize={() => handleEditPartySize(row)}
                       onEditNotes={() => handleEditNotes(row)}
                       onMarkTaxCollected={() => handleMarkTaxFormCollected(row)}
+                      onRefreshTab={() => refreshExistingTab(row.booking_id)}
+                      onAddPresetItem={(preset) => openAddItemModalForBooking(row, preset)}
+                      onAddCustomItem={() => openAddItemModalForBooking(row)}
+                      onRecordPayment={() => openPaymentModalForBooking(row)}
+                      onCloseTab={() => updateTabStatusPrompt(row.booking_id, "closed")}
+                      onVoidTab={() => updateTabStatusPrompt(row.booking_id, "void")}
+                      onVoidLineItem={(lineItemId) =>
+                        voidLineItem(row.booking_id, lineItemId)
+                      }
+                      onVoidPayment={(paymentId) =>
+                        voidPayment(row.booking_id, paymentId)
+                      }
                     />
                   ))
                 )}
