@@ -23,17 +23,14 @@ import {
   buildTaxInternalNotes,
   defaultCreateForm,
   deriveMetrics,
-  getBookingTimingState,
   getPriorityScore,
   isAttentionBooking,
-  normalizeTaxExemptStatus,
   toneClass,
 } from "./lib/booking-logic";
 import {
   formatDateTime,
   formatLabel,
   formatMoney,
-  formatTime,
   getLocalDateInputValue,
   shiftDate,
 } from "./lib/format";
@@ -42,7 +39,7 @@ import { AddItemModal } from "./components/AddItemModal";
 import { PaymentModal } from "./components/PaymentModal";
 import { StatCard } from "./components/StatCard";
 import { StatusPill } from "./components/StatusPill";
-import { DetailBox } from "./components/DetailBox";
+import { BookingRow as BookingRowComponent } from "./components/BookingRow";
 import type {
   AddItemFormState,
   BookingRow,
@@ -846,722 +843,59 @@ export default function StaffTodayPage() {
                     </div>
                   </div>
                 ) : (
-                  filteredBookings.map((row) => {
-                    const isExpanded = expanded === row.booking_id;
-                    const busy = busyId === row.booking_id;
-                    const tabBusy = tabBusyId === row.booking_id;
-                    const taxStatus = normalizeTaxExemptStatus(row);
-                    const bookingTab = tabDetailsByBooking[row.booking_id];
-                    const boardDate = data?.date || selectedDate;
-                    const { urgent, late } = getBookingTimingState(row, boardDate);
-                    const attention = isAttentionBooking(row);
-
-                    const rowClassName = [
-                      styles.row,
-                      late ? styles.rowLate : "",
-                      urgent ? styles.rowUrgent : "",
-                      attention ? styles.rowAttention : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ");
-
-                    return (
-                      <div key={row.booking_id} className={rowClassName}>
-                        <div className={styles.rowGrid}>
-                          <div>
-                            <div className={styles.timePrimary}>{formatTime(row.start_time)}</div>
-                            <div className={styles.timeSecondary}>{formatTime(row.end_time)}</div>
-                            {late ? (
-                              <div className={styles.lateLabel}>Past due check-in</div>
-                            ) : urgent ? (
-                              <div className={styles.urgentLabel}>Starting now</div>
-                            ) : null}
-                          </div>
-
-                          <div>
-                            <div className={styles.customerRow}>
-                              <div className={styles.customerName}>{row.customer_name}</div>
-                              {attention ? (
-                                <span className={styles.attentionTag}>Needs attention</span>
-                              ) : null}
-                            </div>
-
-                            <div className={styles.contactBlock}>
-                              {row.email ? (
-                                <a href={`mailto:${row.email}`} className={styles.contactLink}>
-                                  {row.email}
-                                </a>
-                              ) : (
-                                <div className={styles.contactMuted}>No email</div>
-                              )}
-
-                              {row.phone ? (
-                                <a href={`tel:${row.phone}`} className={styles.contactLinkMuted}>
-                                  {row.phone}
-                                </a>
-                              ) : (
-                                <div className={styles.contactMuted}>No phone</div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className={styles.detailStrong}>Party of {row.party_size}</div>
-                            <div className={styles.detailMuted}>
-                              Waivers: {row.waiver_signed ?? 0} /{" "}
-                              {row.waiver_required ?? row.party_size}
-                            </div>
-                            <div className={styles.detailMuted}>
-                              {(row.booking_type || "open").replaceAll("_", " ")} ·{" "}
-                              {(row.booking_source || "unknown").replaceAll("_", " ")}
-                            </div>
-                            <div className={styles.detailMuted}>
-                              Bays: {row.bays_allocated ?? "-"} ·{" "}
-                              {(row.allocation_mode || "-").replaceAll("_", " ")}
-                            </div>
-                            {row.tax_exempt ? (
-                              <div className={styles.detailMuted}>
-                                Tax reason: {formatLabel(row.tax_exempt_reason)}
-                              </div>
-                            ) : null}
-                            {bookingTab ? (
-                              <div className={styles.detailMuted}>
-                                Tab: {formatMoney(bookingTab.tab.grand_total)} · Balance{" "}
-                                {formatMoney(bookingTab.tab.balance_due)}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div>
-                            <StatusPill
-                              label={row.payment_status}
-                              className={toneClass(row.payment_status)}
-                            />
-                            <div className={styles.paymentStrong}>
-                              Due: {formatMoney(row.total_amount)}
-                            </div>
-                            <div className={styles.paymentMuted}>
-                              Paid: {formatMoney(row.amount_paid)}
-                            </div>
-                            <div className={styles.paymentStrong}>
-                              Outstanding:{" "}
-                              {formatMoney(
-                                Math.max(
-                                  0,
-                                  Number(row.total_amount || 0) - Number(row.amount_paid || 0)
-                                )
-                              )}
-                            </div>
-                          </div>
-
-                          <div className={styles.statusGroup}>
-                            <StatusPill
-                              label={row.booking_status}
-                              className={toneClass(row.booking_status)}
-                            />
-                            <StatusPill
-                              label={row.waiver_status}
-                              className={toneClass(row.waiver_status)}
-                            />
-                            {row.tax_exempt ? (
-                              <StatusPill
-                                label="tax_exempt"
-                                className={styles.taxExemptPill}
-                              />
-                            ) : null}
-                            {taxStatus ? (
-                              <StatusPill
-                                label={
-                                  taxStatus === "pending_form"
-                                    ? "form_required"
-                                    : "form_verified"
-                                }
-                                className={toneClass(taxStatus)}
-                              />
-                            ) : null}
-                            {bookingTab ? (
-                              <StatusPill
-                                label={`tab_${bookingTab.tab.status}`}
-                                className={toneClass(bookingTab.tab.status)}
-                              />
-                            ) : null}
-                          </div>
-
-                          <div className={styles.actionStack}>
-                            <div className={styles.actionGroup}>
-                              <button
-                                disabled={busy}
-                                onClick={() =>
-                                  applyUpdate(row.booking_id, {
-                                    payment_status: "paid",
-                                    booking_status:
-                                      row.booking_status === "awaiting_payment"
-                                        ? "paid"
-                                        : row.booking_status,
-                                    amount_paid: row.total_amount,
-                                  })
-                                }
-                                className={styles.successButton}
-                              >
-                                Mark Paid
-                              </button>
-
-                              <button
-                                disabled={busy}
-                                onClick={() =>
-                                  applyUpdate(row.booking_id, {
-                                    payment_status: "pending",
-                                    amount_paid: 0,
-                                  })
-                                }
-                                className={styles.warnButton}
-                              >
-                                Mark Unpaid
-                              </button>
-                            </div>
-
-                            <div className={styles.actionGroup}>
-                              <button
-                                disabled={busy}
-                                onClick={() =>
-                                  applyUpdate(row.booking_id, {
-                                    booking_status: "checked_in",
-                                  })
-                                }
-                                className={styles.infoButton}
-                              >
-                                Check In
-                              </button>
-
-                              <button
-                                disabled={busy}
-                                onClick={() =>
-                                  applyUpdate(row.booking_id, {
-                                    booking_status: "completed",
-                                  })
-                                }
-                                className={styles.ghostButton}
-                              >
-                                Complete
-                              </button>
-
-                              <button
-                                disabled={busy}
-                                onClick={() =>
-                                  applyUpdate(row.booking_id, {
-                                    booking_status: "no_show",
-                                  })
-                                }
-                                className={styles.dangerButton}
-                              >
-                                No Show
-                              </button>
-
-                              <button
-                                disabled={busy}
-                                onClick={() => setExpanded(isExpanded ? null : row.booking_id)}
-                                className={styles.secondaryButton}
-                              >
-                                {isExpanded ? "Hide" : "Details"}
-                              </button>
-                            </div>
-
-                            <div className={styles.actionGroup}>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenWaiver(row)}
-                                className={styles.waiverButton}
-                              >
-                                Open Waiver
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyWaiverLink(row)}
-                                className={styles.secondaryButton}
-                              >
-                                Copy Link
-                              </button>
-                              <button
-                                type="button"
-                                disabled={tabBusy}
-                                onClick={() => ensureBookingTab(row)}
-                                className={styles.primaryButton}
-                              >
-                                {bookingTab ? "Refresh Tab" : "Open Tab"}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={tabBusy}
-                                onClick={() => openAddItemModalForBooking(row, ITEM_PRESETS[0])}
-                                className={styles.secondaryButton}
-                              >
-                                + Item
-                              </button>
-                              <button
-                                type="button"
-                                disabled={tabBusy}
-                                onClick={() => openPaymentModalForBooking(row)}
-                                className={styles.successButton}
-                              >
-                                Payment
-                              </button>
-                              {row.tax_exempt && taxStatus === "pending_form" ? (
-                                <button
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() => handleMarkTaxFormCollected(row)}
-                                  className={styles.taxButton}
-                                >
-                                  Mark Form Collected
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-
-                        {isExpanded ? (
-                          <div className={styles.expandPanel}>
-                            <div className={styles.expandGrid}>
-                              <DetailBox
-                                title="Customer Notes"
-                                value={row.customer_notes || "None"}
-                              />
-                              <DetailBox
-                                title="Internal Notes"
-                                value={row.internal_notes || "None"}
-                              />
-                              <DetailBox
-                                title="Payment Snapshot"
-                                value={`Status: ${row.payment_status}\nDue: ${formatMoney(
-                                  row.total_amount
-                                )}\nPaid: ${formatMoney(row.amount_paid)}\nOutstanding: ${formatMoney(
-                                  Math.max(
-                                    0,
-                                    Number(row.total_amount || 0) - Number(row.amount_paid || 0)
-                                  )
-                                )}`}
-                              />
-                              <DetailBox
-                                title="Tax Handling"
-                                value={
-                                  row.tax_exempt
-                                    ? `Tax Exempt: Yes\nReason: ${formatLabel(
-                                        row.tax_exempt_reason
-                                      )}\nForm Status: ${formatLabel(
-                                        taxStatus || "unknown"
-                                      )}\nCollected At: ${
-                                        row.tax_exempt_form_collected_at || "Not recorded"
-                                      }`
-                                    : "Tax Exempt: No"
-                                }
-                              />
-                              <div className={styles.detailBox}>
-                                <div className={styles.detailTitle}>Waiver + Quick Adjust</div>
-
-                                <div className={styles.quickInfo}>
-                                  <div>
-                                    Waiver:{" "}
-                                    <span className={styles.quickStrong}>
-                                      {row.waiver_status.replaceAll("_", " ")}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    Signed:{" "}
-                                    <span className={styles.quickStrong}>
-                                      {row.waiver_signed ?? 0} /{" "}
-                                      {row.waiver_required ?? row.party_size}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    Booking ID:{" "}
-                                    <span className={styles.codeText}>{row.booking_id}</span>
-                                  </div>
-                                  <div className={styles.waiverUrlBlock}>
-                                    <span className={styles.quickStrong}>Waiver URL:</span>
-                                    <a
-                                      href={row.waiver_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className={styles.waiverLink}
-                                    >
-                                      {row.waiver_url}
-                                    </a>
-                                  </div>
-                                </div>
-
-                                <div className={styles.quickActions}>
-                                  <button
-                                    onClick={() => handleOpenWaiver(row)}
-                                    className={styles.waiverButton}
-                                  >
-                                    Open Waiver
-                                  </button>
-                                  <button
-                                    onClick={() => handleCopyWaiverLink(row)}
-                                    className={styles.ghostButton}
-                                  >
-                                    Copy Waiver Link
-                                  </button>
-                                  <button
-                                    onClick={() => handleEditPartySize(row)}
-                                    className={styles.ghostButton}
-                                  >
-                                    Edit Party Size
-                                  </button>
-                                  <button
-                                    onClick={() => handleEditNotes(row)}
-                                    className={styles.ghostButton}
-                                  >
-                                    Edit Notes
-                                  </button>
-                                  <button
-                                    onClick={() => ensureBookingTab(row)}
-                                    disabled={tabBusy}
-                                    className={styles.primaryButton}
-                                  >
-                                    {bookingTab ? "Refresh Tab" : "Open Tab"}
-                                  </button>
-                                  {row.tax_exempt && taxStatus === "pending_form" ? (
-                                    <button
-                                      onClick={() => handleMarkTaxFormCollected(row)}
-                                      className={styles.taxButton}
-                                    >
-                                      Mark Form Collected
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-
-                            {bookingTab ? (
-                              <div className={styles.tabPanel}>
-                                <div className={styles.tabHeader}>
-                                  <div>
-                                    <div className={styles.detailTitle}>Live Tab / Invoice</div>
-                                    <div className={styles.tabTitleRow}>
-                                      <h3 className={styles.tabTitle}>
-                                        {bookingTab.tab.party_name ||
-                                          row.customer_name ||
-                                          "Open Tab"}
-                                      </h3>
-                                      <div className={styles.statusGroup}>
-                                        <StatusPill
-                                          label={bookingTab.tab.tab_type}
-                                          className={styles.toneNeutral}
-                                        />
-                                        <StatusPill
-                                          label={bookingTab.tab.status}
-                                          className={toneClass(bookingTab.tab.status)}
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className={styles.tabMeta}>
-                                      Opened {formatDateTime(bookingTab.tab.opened_at)} · Tab ID{" "}
-                                      <span className={styles.codeText}>{bookingTab.tab.id}</span>
-                                    </div>
-                                  </div>
-
-                                  <div className={styles.tabActions}>
-                                    <button
-                                      className={styles.secondaryButton}
-                                      disabled={tabBusy}
-                                      onClick={() =>
-                                        refreshExistingTab(row.booking_id || bookingTab.tab.id)
-                                      }
-                                    >
-                                      Refresh Tab
-                                    </button>
-                                    <button
-                                      className={styles.secondaryButton}
-                                      disabled={tabBusy}
-                                      onClick={() =>
-                                        openAddItemModalForBooking(
-                                          {
-                                            ...row,
-                                            booking_id: row.booking_id || bookingTab.tab.id,
-                                          },
-                                          ITEM_PRESETS[0]
-                                        )
-                                      }
-                                    >
-                                      + Coke
-                                    </button>
-                                    <button
-                                      className={styles.secondaryButton}
-                                      disabled={tabBusy}
-                                      onClick={() =>
-                                        openAddItemModalForBooking(
-                                          {
-                                            ...row,
-                                            booking_id: row.booking_id || bookingTab.tab.id,
-                                          },
-                                          ITEM_PRESETS[1]
-                                        )
-                                      }
-                                    >
-                                      + Water
-                                    </button>
-                                    <button
-                                      className={styles.secondaryButton}
-                                      disabled={tabBusy}
-                                      onClick={() =>
-                                        openAddItemModalForBooking(
-                                          {
-                                            ...row,
-                                            booking_id: row.booking_id || bookingTab.tab.id,
-                                          },
-                                          ITEM_PRESETS[2]
-                                        )
-                                      }
-                                    >
-                                      + Shirt
-                                    </button>
-                                    <button
-                                      className={styles.secondaryButton}
-                                      disabled={tabBusy}
-                                      onClick={() =>
-                                        openAddItemModalForBooking(
-                                          {
-                                            ...row,
-                                            booking_id: row.booking_id || bookingTab.tab.id,
-                                          },
-                                          ITEM_PRESETS[3]
-                                        )
-                                      }
-                                    >
-                                      + Axe
-                                    </button>
-                                    <button
-                                      className={styles.primaryButton}
-                                      disabled={tabBusy}
-                                      onClick={() =>
-                                        openAddItemModalForBooking({
-                                          ...row,
-                                          booking_id: row.booking_id || bookingTab.tab.id,
-                                        })
-                                      }
-                                    >
-                                      + Custom Item
-                                    </button>
-                                    <button
-                                      className={styles.successButton}
-                                      disabled={tabBusy}
-                                      onClick={() =>
-                                        openPaymentModalForBooking({
-                                          ...row,
-                                          booking_id: row.booking_id || bookingTab.tab.id,
-                                        })
-                                      }
-                                    >
-                                      Record Payment
-                                    </button>
-                                    <button
-                                      className={styles.infoButton}
-                                      disabled={tabBusy || bookingTab.tab.status !== "open"}
-                                      onClick={() =>
-                                        updateTabStatusPrompt(
-                                          row.booking_id || bookingTab.tab.id,
-                                          "closed"
-                                        )
-                                      }
-                                    >
-                                      Close Tab
-                                    </button>
-                                    <button
-                                      className={styles.dangerButton}
-                                      disabled={tabBusy || bookingTab.tab.status === "void"}
-                                      onClick={() =>
-                                        updateTabStatusPrompt(
-                                          row.booking_id || bookingTab.tab.id,
-                                          "void"
-                                        )
-                                      }
-                                    >
-                                      Void Tab
-                                    </button>
-                                  </div>
-                                </div>
-
-                                <div className={styles.tabSummaryGrid}>
-                                  <div className={styles.tabMetricCard}>
-                                    <div className={styles.statLabel}>Subtotal</div>
-                                    <div className={styles.tabMetricValue}>
-                                      {formatMoney(bookingTab.tab.subtotal)}
-                                    </div>
-                                  </div>
-                                  <div className={styles.tabMetricCard}>
-                                    <div className={styles.statLabel}>Tax</div>
-                                    <div className={styles.tabMetricValue}>
-                                      {formatMoney(bookingTab.tab.tax_total)}
-                                    </div>
-                                  </div>
-                                  <div className={styles.tabMetricCard}>
-                                    <div className={styles.statLabel}>Grand Total</div>
-                                    <div className={styles.tabMetricValue}>
-                                      {formatMoney(bookingTab.tab.grand_total)}
-                                    </div>
-                                  </div>
-                                  <div className={styles.tabMetricCard}>
-                                    <div className={styles.statLabel}>Paid</div>
-                                    <div className={styles.tabMetricValue}>
-                                      {formatMoney(bookingTab.tab.amount_paid)}
-                                    </div>
-                                  </div>
-                                  <div className={styles.tabMetricCard}>
-                                    <div className={styles.statLabel}>Balance Due</div>
-                                    <div className={styles.tabMetricValue}>
-                                      {formatMoney(bookingTab.tab.balance_due)}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className={styles.tabBodyGrid}>
-                                  <div className={styles.tabTableCard}>
-                                    <div className={styles.detailTitle}>Line Items</div>
-                                    {bookingTab.line_items.length === 0 ? (
-                                      <div className={styles.emptyMini}>
-                                        No line items on this tab yet.
-                                      </div>
-                                    ) : (
-                                      <div className={styles.tabTable}>
-                                        <div className={styles.tabTableHead}>
-                                          <div>Item</div>
-                                          <div>Qty</div>
-                                          <div>Tax</div>
-                                          <div>Total</div>
-                                          <div>Action</div>
-                                        </div>
-                                        {bookingTab.line_items.map((item) => {
-                                          const isVoided =
-                                            (item.note || "").includes("[VOID LINE ITEM]") ||
-                                            item.line_total === 0;
-
-                                          return (
-                                            <div
-                                              key={item.id}
-                                              className={`${styles.tabTableRow} ${
-                                                isVoided ? styles.tabRowVoided : ""
-                                              }`}
-                                            >
-                                              <div>
-                                                <div className={styles.tabItemName}>
-                                                  {item.description}
-                                                </div>
-                                                <div className={styles.tabItemMeta}>
-                                                  {formatLabel(item.item_type)} ·{" "}
-                                                  {item.tax_exempt_override
-                                                    ? "tax exempt override"
-                                                    : item.taxable
-                                                    ? "taxable"
-                                                    : "non-taxable"}
-                                                </div>
-                                              </div>
-                                              <div>{item.quantity}</div>
-                                              <div>{formatMoney(item.line_tax)}</div>
-                                              <div>{formatMoney(item.line_total)}</div>
-                                              <div>
-                                                <button
-                                                  className={styles.ghostButton}
-                                                  disabled={tabBusy || isVoided}
-                                                  onClick={() =>
-                                                    voidLineItem(
-                                                      row.booking_id || bookingTab.tab.id,
-                                                      item.id
-                                                    )
-                                                  }
-                                                >
-                                                  Void
-                                                </button>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <div className={styles.tabTableCard}>
-                                    <div className={styles.detailTitle}>Payments</div>
-                                    {bookingTab.payments.length === 0 ? (
-                                      <div className={styles.emptyMini}>
-                                        No payments recorded on this tab yet.
-                                      </div>
-                                    ) : (
-                                      <div className={styles.tabTable}>
-                                        <div className={styles.tabTableHead}>
-                                          <div>Method</div>
-                                          <div>Amount</div>
-                                          <div>Status</div>
-                                          <div>When</div>
-                                          <div>Action</div>
-                                        </div>
-                                        {bookingTab.payments.map((payment) => (
-                                          <div
-                                            key={payment.id}
-                                            className={`${styles.tabTableRow} ${
-                                              payment.status === "void"
-                                                ? styles.tabRowVoided
-                                                : ""
-                                            }`}
-                                          >
-                                            <div>
-                                              <div className={styles.tabItemName}>
-                                                {formatLabel(payment.payment_method)}
-                                              </div>
-                                              <div className={styles.tabItemMeta}>
-                                                {payment.reference || payment.note || "—"}
-                                              </div>
-                                            </div>
-                                            <div>{formatMoney(payment.amount)}</div>
-                                            <div>
-                                              <StatusPill
-                                                label={payment.status}
-                                                className={toneClass(payment.status)}
-                                              />
-                                            </div>
-                                            <div>{formatDateTime(payment.created_at)}</div>
-                                            <div>
-                                              <button
-                                                className={styles.ghostButton}
-                                                disabled={tabBusy || payment.status === "void"}
-                                                onClick={() =>
-                                                  voidPayment(
-                                                    row.booking_id || bookingTab.tab.id,
-                                                    payment.id
-                                                  )
-                                                }
-                                              >
-                                                Void
-                                              </button>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className={styles.tabPanelPlaceholder}>
-                                <div className={styles.detailTitle}>Tab / Invoice</div>
-                                <p className={styles.emptyText}>
-                                  Open a tab to add drinks, retail, custom charges, and
-                                  in-store payments against this booking.
-                                </p>
-                                <button
-                                  className={styles.primaryButton}
-                                  disabled={tabBusy}
-                                  onClick={() => ensureBookingTab(row)}
-                                >
-                                  Open Tab
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
+                  filteredBookings.map((row) => (
+                    <BookingRowComponent
+                      key={row.booking_id}
+                      row={row}
+                      expanded={expanded === row.booking_id}
+                      toggleExpand={() =>
+                        setExpanded(expanded === row.booking_id ? null : row.booking_id)
+                      }
+                      busy={busyId === row.booking_id}
+                      tabBusy={tabBusyId === row.booking_id}
+                      bookingTab={tabDetailsByBooking[row.booking_id]}
+                      boardDate={data?.date || selectedDate}
+                      onMarkPaid={() =>
+                        applyUpdate(row.booking_id, {
+                          payment_status: "paid",
+                          booking_status:
+                            row.booking_status === "awaiting_payment"
+                              ? "paid"
+                              : row.booking_status,
+                          amount_paid: row.total_amount,
+                        })
+                      }
+                      onMarkUnpaid={() =>
+                        applyUpdate(row.booking_id, {
+                          payment_status: "pending",
+                          amount_paid: 0,
+                        })
+                      }
+                      onCheckIn={() =>
+                        applyUpdate(row.booking_id, {
+                          booking_status: "checked_in",
+                        })
+                      }
+                      onComplete={() =>
+                        applyUpdate(row.booking_id, {
+                          booking_status: "completed",
+                        })
+                      }
+                      onNoShow={() =>
+                        applyUpdate(row.booking_id, {
+                          booking_status: "no_show",
+                        })
+                      }
+                      onOpenWaiver={() => handleOpenWaiver(row)}
+                      onCopyWaiver={() => handleCopyWaiverLink(row)}
+                      onEnsureTab={() => ensureBookingTab(row)}
+                      onAddItem={() => openAddItemModalForBooking(row)}
+                      onPayment={() => openPaymentModalForBooking(row)}
+                      onEditPartySize={() => handleEditPartySize(row)}
+                      onEditNotes={() => handleEditNotes(row)}
+                      onMarkTaxCollected={() => handleMarkTaxFormCollected(row)}
+                    />
+                  ))
                 )}
               </section>
 
