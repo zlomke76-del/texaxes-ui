@@ -3,6 +3,8 @@
 import styles from "../page.module.css";
 import { formatLabel, formatMoney } from "../lib/format";
 import { DetailBox } from "./DetailBox";
+import { TabPanel } from "./TabPanel";
+import { ITEM_PRESETS } from "../constants";
 import type { BookingRow, TabDetailResponse } from "../types";
 
 type Props = {
@@ -16,6 +18,14 @@ type Props = {
   onEditNotes: () => void;
   onEnsureTab: () => void;
   onMarkTaxCollected: () => void;
+  onRefreshTab?: () => void;
+  onAddPresetItem?: (preset: (typeof ITEM_PRESETS)[number]) => void;
+  onAddCustomItem?: () => void;
+  onRecordPayment?: () => void;
+  onCloseTab?: () => void;
+  onVoidTab?: () => void;
+  onVoidLineItem?: (lineItemId: string) => void;
+  onVoidPayment?: (paymentId: string) => void;
 };
 
 export function BookingExpandedPanel({
@@ -29,6 +39,14 @@ export function BookingExpandedPanel({
   onEditNotes,
   onEnsureTab,
   onMarkTaxCollected,
+  onRefreshTab,
+  onAddPresetItem,
+  onAddCustomItem,
+  onRecordPayment,
+  onCloseTab,
+  onVoidTab,
+  onVoidLineItem,
+  onVoidPayment,
 }: Props) {
   return (
     <div className={styles.expandPanel}>
@@ -116,6 +134,37 @@ export function BookingExpandedPanel({
           </div>
         </div>
       </div>
+
+      {bookingTab ? (
+        <TabPanel
+          row={row}
+          bookingTab={bookingTab}
+          tabBusy={tabBusy}
+          onRefreshTab={onRefreshTab || (() => {})}
+          onAddPresetItem={onAddPresetItem || (() => {})}
+          onAddCustomItem={onAddCustomItem || (() => {})}
+          onRecordPayment={onRecordPayment || (() => {})}
+          onCloseTab={onCloseTab || (() => {})}
+          onVoidTab={onVoidTab || (() => {})}
+          onVoidLineItem={onVoidLineItem || (() => {})}
+          onVoidPayment={onVoidPayment || (() => {})}
+        />
+      ) : (
+        <div className={styles.tabPanelPlaceholder}>
+          <div className={styles.detailTitle}>Tab / Invoice</div>
+          <p className={styles.emptyText}>
+            Open a tab to add drinks, retail, custom charges, and in-store payments
+            against this booking.
+          </p>
+          <button
+            className={styles.primaryButton}
+            disabled={tabBusy}
+            onClick={onEnsureTab}
+          >
+            Open Tab
+          </button>
+        </div>
+      )}
     </div>
   );
 }
