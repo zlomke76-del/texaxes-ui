@@ -11,12 +11,16 @@ import type {
 } from "../types";
 
 async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers || {});
+  const hasBody = init?.body !== undefined && init?.body !== null;
+
+  if (hasBody && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const res = await fetch(`${OPS_API_BASE}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
+    headers,
     cache: "no-store",
   });
 
@@ -24,7 +28,9 @@ async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const json = text ? JSON.parse(text) : {};
 
   if (!res.ok) {
-    throw new Error((json as { error?: string })?.error || `Request failed: ${res.status}`);
+    throw new Error(
+      (json as { error?: string })?.error || `Request failed: ${res.status}`
+    );
   }
 
   return json as T;
@@ -48,7 +54,9 @@ export function getOpenTabs(status: TabStatus = "open", search?: string) {
   const params = new URLSearchParams({ status });
   if (search) params.set("search", search);
 
-  return opsFetch<ListOpenTabsResponse>(`/api/admin/list-open-tabs?${params.toString()}`);
+  return opsFetch<ListOpenTabsResponse>(
+    `/api/admin/list-open-tabs?${params.toString()}`
+  );
 }
 
 export function updateBooking(booking_id: string, updates: Record<string, unknown>) {
