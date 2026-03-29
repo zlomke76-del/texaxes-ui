@@ -1,8 +1,7 @@
 import type { FilterKey, ItemType } from "./types";
 
 export const OPS_API_BASE =
-  process.env.NEXT_PUBLIC_TEXAXES_OPS_URL?.replace(/\/+$/, "") ||
-  "https://texaxes-ops.vercel.app";
+  process.env.NEXT_PUBLIC_TEXAXES_OPS_URL?.replace(/\/+$/, "") || "";
 
 export const FILTER_OPTIONS: Array<[FilterKey, string]> = [
   ["all", "All"],
