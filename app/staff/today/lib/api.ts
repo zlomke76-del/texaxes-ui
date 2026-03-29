@@ -44,7 +44,7 @@ export function getBookingsToday(date: string) {
 
 export function getAvailability(date: string, throwers: number) {
   return opsFetch<AvailabilityResponse>(
-    `/api/availability?date=${encodeURIComponent(date)}&throwers=${encodeURIComponent(
+    `/availability?date=${encodeURIComponent(date)}&throwers=${encodeURIComponent(
       String(throwers)
     )}`
   );
