@@ -52,7 +52,7 @@ import type {
 } from "./types";
 
 export default function StaffTodayPage() {
-  const [selectedDate, setSelectedDate] = useState<string>(getLocalDateInputValue);
+  const [selectedDate, setSelectedDate] = useState<string>("");
   const [data, setData] = useState<TodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -86,12 +86,18 @@ export default function StaffTodayPage() {
   const [paymentForm, setPaymentForm] = useState<PaymentFormState | null>(null);
 
   useEffect(() => {
+    setSelectedDate(getLocalDateInputValue());
+  }, []);
+
+  useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 2500);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
   async function loadBoard(date = selectedDate) {
+    if (!date) return;
+
     try {
       setLoading(true);
       setError("");
@@ -105,6 +111,11 @@ export default function StaffTodayPage() {
   }
 
   async function loadAvailability(date: string, throwers: number) {
+    if (!date) {
+      setAvailability([]);
+      return;
+    }
+
     try {
       setAvailabilityLoading(true);
       const json = await getAvailability(date, throwers);
@@ -129,6 +140,7 @@ export default function StaffTodayPage() {
   }
 
   useEffect(() => {
+    if (!selectedDate) return;
     loadBoard(selectedDate);
     setExpanded(null);
   }, [selectedDate]);
@@ -138,7 +150,7 @@ export default function StaffTodayPage() {
   }, []);
 
   useEffect(() => {
-    if (!showCreateModal) return;
+    if (!showCreateModal || !selectedDate) return;
     loadAvailability(selectedDate, createForm.throwers);
   }, [showCreateModal, selectedDate, createForm.throwers]);
 
@@ -276,6 +288,11 @@ export default function StaffTodayPage() {
     try {
       setCreateBusy(true);
       setCreateError("");
+
+      if (!selectedDate) {
+        setCreateError("Select a date before creating the booking.");
+        return;
+      }
 
       if (!createForm.time) {
         setCreateError("Select a time slot before creating the booking.");
@@ -694,7 +711,7 @@ export default function StaffTodayPage() {
                 <div className={styles.metaRow}>
                   <span className={styles.metaPill}>Connected: {OPS_API_BASE}</span>
                   <span className={styles.metaPill}>
-                    Selected Date: {data?.date || selectedDate}
+                    Selected Date: {data?.date || selectedDate || "—"}
                   </span>
                   <span className={styles.metaPill}>
                     Open tabs: {openTabsSummary?.summary.open_count ?? "—"}
@@ -710,6 +727,7 @@ export default function StaffTodayPage() {
                 <button
                   onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}
                   className={styles.secondaryButton}
+                  disabled={!selectedDate}
                 >
                   ← Prev
                 </button>
@@ -731,6 +749,7 @@ export default function StaffTodayPage() {
                 <button
                   onClick={() => setSelectedDate(shiftDate(selectedDate, 1))}
                   className={styles.secondaryButton}
+                  disabled={!selectedDate}
                 >
                   Next →
                 </button>
@@ -738,6 +757,7 @@ export default function StaffTodayPage() {
                 <button
                   onClick={() => loadBoard(selectedDate)}
                   className={styles.secondaryButton}
+                  disabled={!selectedDate}
                 >
                   Refresh Board
                 </button>
