@@ -1,12 +1,17 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 const OPS_URL =
   process.env.NEXT_PUBLIC_OPS_URL ||
   "https://texaxes-ops.vercel.app";
 
 export default function WaiverPage() {
+  const searchParams = useSearchParams();
+  const bookingId = searchParams.get("booking_id");
+  const customerId = searchParams.get("customer_id");
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
@@ -46,13 +51,13 @@ export default function WaiverPage() {
     );
   }, [ack, form.is_minor]);
 
-  function updateForm<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
+  function updateForm<K extends keyof typeof form>(
+    key: K,
+    value: (typeof form)[K]
+  ) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  // ===============================
-  // SIGNATURE PAD
-  // ===============================
   function getContext() {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -129,11 +134,18 @@ export default function WaiverPage() {
     return canvas.toDataURL("image/png");
   }
 
-  // ===============================
-  // SUBMIT
-  // ===============================
   async function handleSubmit() {
     setError(null);
+
+    if (!bookingId) {
+      setError("Missing booking context.");
+      return;
+    }
+
+    if (!customerId) {
+      setError("Missing customer context.");
+      return;
+    }
 
     if (!form.first_name.trim() || !form.last_name.trim()) {
       setError("Participant first and last name are required.");
@@ -141,12 +153,17 @@ export default function WaiverPage() {
     }
 
     if (!allChecked) {
-      setError("You must review and acknowledge all required terms before signing.");
+      setError(
+        "You must review and acknowledge all required terms before signing."
+      );
       return;
     }
 
     if (form.is_minor) {
-      if (!form.guardian_first_name.trim() || !form.guardian_last_name.trim()) {
+      if (
+        !form.guardian_first_name.trim() ||
+        !form.guardian_last_name.trim()
+      ) {
         setError("Guardian first and last name are required for minors.");
         return;
       }
@@ -167,6 +184,8 @@ export default function WaiverPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          booking_id: bookingId,
+          customer_id: customerId,
           customer: {
             first_name: form.first_name.trim(),
             last_name: form.last_name.trim(),
@@ -210,6 +229,11 @@ export default function WaiverPage() {
             <p>
               You’re all set. Your waiver has been recorded successfully.
             </p>
+            {bookingId && (
+              <p className="successSubtext">
+                Your waiver is now linked to your booking.
+              </p>
+            )}
           </div>
         </div>
 
@@ -255,6 +279,9 @@ export default function WaiverPage() {
             margin: 0;
             color: rgba(248, 250, 252, 0.75);
             line-height: 1.7;
+          }
+          .successSubtext {
+            margin-top: 12px;
           }
         `}</style>
       </div>
@@ -312,7 +339,9 @@ export default function WaiverPage() {
                 checked={form.is_minor}
                 onChange={(e) => updateForm("is_minor", e.target.checked)}
               />
-              <span>Participant is a minor and requires parent/legal guardian consent</span>
+              <span>
+                Participant is a minor and requires parent/legal guardian consent
+              </span>
             </label>
           </div>
 
@@ -324,25 +353,33 @@ export default function WaiverPage() {
                 <input
                   placeholder="Guardian First Name"
                   value={form.guardian_first_name}
-                  onChange={(e) => updateForm("guardian_first_name", e.target.value)}
+                  onChange={(e) =>
+                    updateForm("guardian_first_name", e.target.value)
+                  }
                 />
 
                 <input
                   placeholder="Guardian Last Name"
                   value={form.guardian_last_name}
-                  onChange={(e) => updateForm("guardian_last_name", e.target.value)}
+                  onChange={(e) =>
+                    updateForm("guardian_last_name", e.target.value)
+                  }
                 />
 
                 <input
                   placeholder="Guardian Email"
                   value={form.guardian_email}
-                  onChange={(e) => updateForm("guardian_email", e.target.value)}
+                  onChange={(e) =>
+                    updateForm("guardian_email", e.target.value)
+                  }
                 />
 
                 <input
                   placeholder="Guardian Phone"
                   value={form.guardian_phone}
-                  onChange={(e) => updateForm("guardian_phone", e.target.value)}
+                  onChange={(e) =>
+                    updateForm("guardian_phone", e.target.value)
+                  }
                 />
               </div>
             </div>
@@ -466,7 +503,9 @@ export default function WaiverPage() {
                 checked={ack.risk}
                 onChange={(e) => setAck({ ...ack, risk: e.target.checked })}
               />
-              <span>I understand the risks involved, including serious injury or death.</span>
+              <span>
+                I understand the risks involved, including serious injury or death.
+              </span>
             </label>
 
             <label className="checkbox">
@@ -501,7 +540,9 @@ export default function WaiverPage() {
                 <input
                   type="checkbox"
                   checked={ack.guardian}
-                  onChange={(e) => setAck({ ...ack, guardian: e.target.checked })}
+                  onChange={(e) =>
+                    setAck({ ...ack, guardian: e.target.checked })
+                  }
                 />
                 <span>
                   I certify that I am the parent/legal guardian and agree on behalf of
@@ -533,7 +574,11 @@ export default function WaiverPage() {
               />
             </div>
 
-            <button type="button" className="clearButton" onClick={clearSignature}>
+            <button
+              type="button"
+              className="clearButton"
+              onClick={clearSignature}
+            >
               Clear Signature
             </button>
           </div>
