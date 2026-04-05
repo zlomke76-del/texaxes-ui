@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">Elevated Tex Axes logo</title>
+  <desc id="desc">A refined Texas-shaped logo in navy, white, and red with a white star and centered Tex Axes wordmark with crossed axes.</desc>
+
+  <defs>
+    <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2C397A"/>
+      <stop offset="100%" stop-color="#1F2C66"/>
+    </linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#C9323C"/>
+      <stop offset="100%" stop-color="#A92331"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.16"/>
+    </filter>
+
+    <!-- Texas silhouette -->
+    <path id="texas-shape" d="M405 72
+      L582 72
+      L582 247
+      C605 259 642 271 689 281
+      C723 288 758 288 792 297
+      C832 308 872 306 912 313
+      C948 319 973 335 1008 348
+      L1008 443
+      C1008 458 1016 473 1026 491
+      C1034 506 1037 522 1035 540
+      C1033 566 1032 599 1023 627
+      C1017 648 992 655 969 666
+      C944 678 921 690 893 707
+      C884 728 869 741 848 753
+      C823 767 796 782 771 796
+      L771 781
+      L755 782
+      C741 799 730 811 725 825
+      C718 844 699 863 683 887
+      C677 899 672 916 675 932
+      C681 964 694 998 707 1027
+      L637 1027
+      C624 1019 605 1016 588 1012
+      C556 1004 520 1004 490 991
+      C457 977 446 952 436 915
+      C430 891 418 867 405 845
+      C380 802 356 757 336 706
+      C331 692 327 677 314 666
+      C299 652 281 641 269 624
+      C252 600 222 610 195 604
+      C161 596 144 609 121 609
+      C113 635 110 661 97 681
+      C90 691 76 689 64 683
+      C42 672 24 658 4 651
+      C-34 637 -58 610 -76 574
+      C-83 560 -87 544 -92 529
+      C-105 489 -113 462 -135 445
+      C-154 430 -180 430 -206 414
+      C-235 396 -246 365 -274 350
+      C-296 338 -316 325 -330 304
+      C-352 272 -383 261 -418 252
+      C-449 243 -472 228 -490 204
+      C-505 185 -529 176 -545 160
+      C-565 141 -580 121 -590 95
+      L-379 95
+      L-379 -208
+      L405 -208 Z" />
+
+    <clipPath id="texas-clip">
+      <use href="#texas-shape"/>
+    </clipPath>
+  </defs>
+
+  <g transform="translate(602 365) scale(0.62)" filter="url(#shadow)">
+    <!-- full white base and border -->
+    <use href="#texas-shape" fill="#FFFFFF"/>
+    <use href="#texas-shape" fill="none" stroke="#A32733" stroke-width="10"/>
+
+    <!-- left navy half -->
+    <rect x="-650" y="-260" width="650" height="1400" fill="url(#navy)" clip-path="url(#texas-clip)"/>
+
+    <!-- bottom-right red half -->
+    <rect x="0" y="470" width="1100" height="700" fill="url(#red)" clip-path="url(#texas-clip)"/>
+
+    <!-- center divider -->
+    <rect x="-8" y="-260" width="16" height="1330" fill="#FFFFFF" clip-path="url(#texas-clip)"/>
+
+    <!-- white star -->
+    <path d="M-142 340
+             L-90 447
+             L29 465
+             L-57 548
+             L-37 664
+             L-142 608
+             L-247 664
+             L-227 548
+             L-313 465
+             L-194 447 Z"
+          fill="#FFFFFF"/>
+
+    <!-- refined wordmark -->
+    <g transform="translate(8 290)">
+      <text x="-248" y="0"
+            font-size="168"
+            font-family="Georgia, 'Times New Roman', serif"
+            font-weight="700"
+            letter-spacing="6"
+            fill="#B32733">TE</text>
+
+      <text x="-58" y="70"
+            font-size="162"
+            font-family="Georgia, 'Times New Roman', serif"
+            font-weight="700"
+            letter-spacing="5"
+            fill="#B32733">A</text>
+
+      <text x="202" y="70"
+            font-size="162"
+            font-family="Georgia, 'Times New Roman', serif"
+            font-weight="700"
+            letter-spacing="5"
+            fill="#B32733">ES</text>
+
+      <!-- crossed axes as the X -->
+      <g transform="translate(95,0) rotate(-4)">
+        <!-- left handle -->
+        <g transform="translate(-44,8) rotate(-34)">
+          <rect x="-13" y="-8" width="26" height="158" rx="9" fill="#B32733"/>
+          <rect x="-11" y="106" width="22" height="48" rx="7" fill="#F6E1C3"/>
+          <path d="M-50 -12
+                   C-28 -24, 10 -24, 46 -10
+                   L38 28
+                   C5 21 -24 24 -45 35
+                   Z"
+                fill="#B32733"/>
+          <path d="M25 -4 L58 30" stroke="#F6E1C3" stroke-width="10" stroke-linecap="round"/>
+        </g>
+
+        <!-- right handle -->
+        <g transform="translate(44,8) rotate(34)">
+          <rect x="-13" y="-8" width="26" height="158" rx="9" fill="#B32733"/>
+          <rect x="-11" y="106" width="22" height="48" rx="7" fill="#F6E1C3"/>
+          <path d="M50 -12
+                   C28 -24, -10 -24, -46 -10
+                   L-38 28
+                   C-5 21 24 24 45 35
+                   Z"
+                fill="#B32733"/>
+          <path d="M-25 -4 L-58 30" stroke="#F6E1C3" stroke-width="10" stroke-linecap="round"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>
