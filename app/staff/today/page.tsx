@@ -737,74 +737,13 @@ export default function StaffTodayPage() {
     </a>
 
     <div className={styles.heroActions}>
-      <button
-        onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}
-        className={styles.secondaryButton}
-        disabled={!selectedDate}
-      >
-        ← Prev
-      </button>
-
-      <button
-        onClick={() => setSelectedDate(getLocalDateInputValue())}
-        className={styles.secondaryButton}
-      >
-        Today
-      </button>
-
-      <input
-        type="date"
-        value={selectedDate}
-        onChange={(e) => setSelectedDate(e.target.value)}
-        className={styles.dateInput}
-      />
-
-      <button
-        onClick={() => setSelectedDate(shiftDate(selectedDate, 1))}
-        className={styles.secondaryButton}
-        disabled={!selectedDate}
-      >
-        Next →
-      </button>
-
-      <button
-        onClick={() => loadBoard(selectedDate)}
-        className={styles.secondaryButton}
-        disabled={!selectedDate}
-      >
-        Refresh Board
-      </button>
-
-      <button onClick={openCreateModal} className={styles.primaryButton}>
-        + New Booking
-      </button>
-
-      <button
-        onClick={() => createStandaloneTab("walk_in")}
-        disabled={tabBusyId === "new-walk_in"}
-        className={styles.secondaryButton}
-      >
-        + Walk-In Tab
-      </button>
-
-      <button
-        onClick={() => createStandaloneTab("spectator")}
-        disabled={tabBusyId === "new-spectator"}
-        className={styles.secondaryButton}
-      >
-        + Spectator Tab
-      </button>
-    </div>
-  </div>
-</section>
-              <div className={styles.heroActions}>
                 <button
                   onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}
                   className={styles.secondaryButton}
                   disabled={!selectedDate}
                 >
                   ← Prev
-                </button>
+              </button>
 
                 <button
                   onClick={() => setSelectedDate(getLocalDateInputValue())}
@@ -854,11 +793,11 @@ export default function StaffTodayPage() {
                   className={styles.secondaryButton}
                 >
                   + Spectator Tab
-                </button>
+              </button>
               </div>
             </div>
           </section>
-
+              
           {loading ? (
             <div className={styles.messageCard}>Loading board...</div>
           ) : error ? (
