@@ -729,7 +729,7 @@ export default function StaffTodayPage() {
   </div>
 
   <a
-    href="https://www.texaxes.com"
+    href="https://www.book.texaxes.com"
     target="_blank"
     rel="noopener noreferrer"
     className={styles.logoWrap}
