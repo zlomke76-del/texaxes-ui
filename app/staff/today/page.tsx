@@ -699,29 +699,46 @@ export default function StaffTodayPage() {
           {toast ? <div className={styles.toast}>{toast}</div> : null}
 
           <section className={styles.hero}>
-            <div className={styles.heroContent}>
-              <div>
-                <div className={styles.kicker}>Tex Axes Staff Board</div>
-                <h1 className={styles.title}>Operations Board</h1>
-                <p className={styles.subtitle}>
-                  Live front-desk command surface for today, tomorrow, and future
-                  bookings. Staff can review, adjust, create bookings, drive waiver
-                  completion, and manage live tabs and payments.
-                </p>
-                <div className={styles.metaRow}>
-                  <span className={styles.metaPill}>Connected: {OPS_API_BASE}</span>
-                  <span className={styles.metaPill}>
-                    Selected Date: {data?.date || selectedDate || "—"}
-                  </span>
-                  <span className={styles.metaPill}>
-                    Open tabs: {openTabsSummary?.summary.open_count ?? "—"}
-                  </span>
-                  <span className={styles.metaPill}>
-                    Open tab balance:{" "}
-                    {formatMoney(openTabsSummary?.summary.total_balance_due ?? 0)}
-                  </span>
-                </div>
-              </div>
+  <div className={styles.heroContent}>
+    <div>
+      <div className={styles.kicker}>Tex Axes Staff Board</div>
+      <h1 className={styles.title}>Operations Board</h1>
+      <p className={styles.subtitle}>
+        Live front-desk command surface for today, tomorrow, and future
+        bookings. Staff can review, adjust, create bookings, drive waiver
+        completion, and manage live tabs and payments.
+      </p>
+      <div className={styles.metaRow}>
+        <span className={styles.metaPill}>Connected: {OPS_API_BASE}</span>
+        <span className={styles.metaPill}>
+          Selected Date: {data?.date || selectedDate || "—"}
+        </span>
+        <span className={styles.metaPill}>
+          Open tabs: {openTabsSummary?.summary.open_count ?? "—"}
+        </span>
+        <span className={styles.metaPill}>
+          Open tab balance:{" "}
+          {formatMoney(openTabsSummary?.summary.total_balance_due ?? 0)}
+        </span>
+      </div>
+    </div>
+
+    {/* ✅ ADD THIS */}
+    <a
+      href="https://www.texaxes.com"
+      target="_blank"
+      rel="noopener noreferrer"
+      className={styles.logoWrap}
+    >
+      <img
+        src="/images/image_logo_tex_axes.png"
+        alt="Tex Axes"
+        className={styles.logo}
+      />
+    </a>
+
+  </div>
+</section>
 
               <div className={styles.heroActions}>
                 <button
