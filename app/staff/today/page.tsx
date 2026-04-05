@@ -723,19 +723,25 @@ export default function StaffTodayPage() {
       </div>
     </div>
 
-    <a
-      href="https://www.texaxes.com"
-      target="_blank"
-      rel="noopener noreferrer"
-      className={styles.logoWrap}
-    >
-      <img
-        src="/images/image_logo_tex_axes.png"
-        alt="Tex Axes"
-        className={styles.logo}
-      />
-    </a>
+    <section className={styles.hero}>
+  <div className={styles.heroContent}>
+    ...
+  </div>
 
+  <a
+    href="https://www.texaxes.com"
+    target="_blank"
+    rel="noopener noreferrer"
+    className={styles.logoWrap}
+  >
+    <img
+      src="/images/image_logo_tex_axes.png"
+      alt="Tex Axes"
+      className={styles.logo}
+    />
+  </a>
+</section>
+ 
     <div className={styles.heroActions}>
                 <button
                   onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}
