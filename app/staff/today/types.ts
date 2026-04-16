@@ -117,12 +117,15 @@ export type CreateBookingPayload = {
   date: string;
   time: string;
   throwers: number;
+  duration_hours: number; // ✅ ADD THIS
   customer: {
     first_name: string;
     last_name: string;
     email?: string | null;
     phone?: string | null;
   };
+  ...
+};
   booking_source: "admin" | "walk_in" | "phone" | "corporate";
   booking_type: "open" | "league" | "corporate";
   customer_notes?: string;
@@ -164,6 +167,7 @@ export type CreateFormState = {
   phone: string;
   time: string;
   throwers: number;
+  duration_hours: 1 | 2 | 3; // ✅ ADD THIS
   booking_source: "admin" | "walk_in" | "phone" | "corporate";
   booking_type: "open" | "league" | "corporate";
   customer_notes: string;
