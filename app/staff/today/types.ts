@@ -100,6 +100,11 @@ export type AvailabilitySlot = {
   preferred_bays_required?: number;
   minimum_bays_required?: number;
   state: "available" | "limited" | "full";
+
+  // NEW FIELDS (from Supabase half-hour view)
+  display_time?: string;
+  capacity_window?: string;
+  derived_half_hour?: boolean;
 };
 
 export type AvailabilityResponse = {
