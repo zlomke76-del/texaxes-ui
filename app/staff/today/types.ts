@@ -100,8 +100,6 @@ export type AvailabilitySlot = {
   preferred_bays_required?: number;
   minimum_bays_required?: number;
   state: "available" | "limited" | "full";
-
-  // NEW FIELDS (from Supabase half-hour view)
   display_time?: string;
   capacity_window?: string;
   derived_half_hour?: boolean;
@@ -117,15 +115,13 @@ export type CreateBookingPayload = {
   date: string;
   time: string;
   throwers: number;
-  duration_hours: number; // ✅ ADD THIS
+  duration_hours: number;
   customer: {
     first_name: string;
     last_name: string;
     email?: string | null;
     phone?: string | null;
   };
-  ...
-};
   booking_source: "admin" | "walk_in" | "phone" | "corporate";
   booking_type: "open" | "league" | "corporate";
   customer_notes?: string;
@@ -167,7 +163,7 @@ export type CreateFormState = {
   phone: string;
   time: string;
   throwers: number;
-  duration_hours: 1 | 2 | 3; // ✅ ADD THIS
+  duration_hours: 1 | 2 | 3;
   booking_source: "admin" | "walk_in" | "phone" | "corporate";
   booking_type: "open" | "league" | "corporate";
   customer_notes: string;
