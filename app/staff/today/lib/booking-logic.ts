@@ -104,6 +104,7 @@ export function defaultCreateForm(): CreateFormState {
     phone: "",
     time: "",
     throwers: 2,
+    duration_hours: 1,
     booking_source: "walk_in",
     booking_type: "open",
     customer_notes: "",
