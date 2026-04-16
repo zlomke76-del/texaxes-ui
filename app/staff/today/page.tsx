@@ -8,7 +8,6 @@ import {
   addPayment,
   createBooking,
   createTab,
-  getAvailability,
   getBookingsToday,
   getOpenTabs,
   getTab,
