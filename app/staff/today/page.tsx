@@ -111,21 +111,37 @@ export default function StaffTodayPage() {
   }
 
   async function loadAvailability(date: string, throwers: number) {
-    if (!date) {
-      setAvailability([]);
-      return;
+  if (!date) {
+    setAvailability([]);
+    return;
+  }
+
+  try {
+    setAvailabilityLoading(true);
+
+    const res = await fetch(
+      `/api/availability?date=${encodeURIComponent(date)}&throwers=${encodeURIComponent(
+        String(throwers)
+      )}`,
+      {
+        method: "GET",
+        cache: "no-store",
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error(`Availability request failed: ${res.status}`);
     }
 
-    try {
-      setAvailabilityLoading(true);
-      const json = await getAvailability(date, throwers);
-      setAvailability(json.slots || []);
-    } catch {
-      setAvailability([]);
-    } finally {
-      setAvailabilityLoading(false);
-    }
+    const json = await res.json();
+    setAvailability(Array.isArray(json?.slots) ? json.slots : []);
+  } catch (err) {
+    console.error("Failed to load availability", err);
+    setAvailability([]);
+  } finally {
+    setAvailabilityLoading(false);
   }
+}
 
   async function loadOpenTabs(status: TabStatus = "open") {
     try {
