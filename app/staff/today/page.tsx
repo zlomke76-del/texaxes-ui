@@ -1,4 +1,4 @@
-"use client";
+  "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
@@ -325,9 +325,10 @@ export default function StaffTodayPage() {
       }
 
       const payload: CreateBookingPayload = {
-        date: selectedDate,
-        time: createForm.time,
-        throwers: Number(createForm.throwers),
+            date: selectedDate,
+  time: createForm.time,
+  throwers: Number(createForm.throwers),
+  duration_hours: createForm.duration_hours, // ✅ ADD THIS
         customer: {
           first_name: createForm.first_name,
           last_name: createForm.last_name,
