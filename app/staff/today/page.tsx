@@ -120,9 +120,9 @@ export default function StaffTodayPage() {
     setAvailabilityLoading(true);
 
     const res = await fetch(
-      `/api/availability?date=${encodeURIComponent(date)}&throwers=${encodeURIComponent(
-        String(throwers)
-      )}`,
+      `${OPS_API_BASE}/api/availability?date=${encodeURIComponent(
+        date
+      )}&throwers=${encodeURIComponent(String(throwers))}`,
       {
         method: "GET",
         cache: "no-store",
