@@ -234,7 +234,8 @@ export function CreateBookingModal({
               <div className={styles.slotLoading}>No available slots found for this date.</div>
             ) : (
               availability.map((slot) => {
-                const selected = form.time === slot.start;
+                const slotTime = slot.display_time || slot.start;
+                const selected = form.time === slotTime;
                 const disabled = slot.state === "full";
                 const className = [
                   styles.slotButton,
@@ -249,13 +250,14 @@ export function CreateBookingModal({
                     key={`${slot.time_block_id}-${slot.start}`}
                     type="button"
                     disabled={disabled}
-                    onClick={() => onUpdateField("time", slot.start)}
+                    onClick={() => onUpdateField("time", slotTime)}
                     className={className}
                   >
-                    <span className={styles.slotTime}>{formatTime(`${slot.start}:00`)}</span>
+                    <span className={styles.slotTime}>{formatTime(`${slotTime}:00`)}</span>
                     <span className={styles.slotMeta}>
-                      {slot.state} · bays open {slot.open_bays}
-                    </span>
+                    {slot.state} · bays open {slot.open_bays}
+                    {slot.derived_half_hour ? " · :30" : ""}
+                  </span>
                   </button>
                 );
               })
