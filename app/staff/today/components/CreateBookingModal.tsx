@@ -66,28 +66,43 @@ export function CreateBookingModal({
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Party Size</label>
-            <input
-              type="number"
-              min={1}
-              max={24}
-              value={form.throwers}
-              onChange={(e) =>
-                onUpdateField("throwers", Math.max(1, Number(e.target.value || 1)))
-              }
-              className={styles.input}
-            />
-          </div>
+  <label className={styles.label}>Party Size</label>
+  <input
+    type="number"
+    min={1}
+    max={24}
+    value={form.throwers}
+    onChange={(e) =>
+      onUpdateField("throwers", Math.max(1, Number(e.target.value || 1)))
+    }
+    className={styles.input}
+  />
+</div>
 
-          <div className={styles.field}>
-            <label className={styles.label}>First Name</label>
-            <input
-              type="text"
-              value={form.first_name}
-              onChange={(e) => onUpdateField("first_name", e.target.value)}
-              className={styles.input}
-            />
-          </div>
+<div className={styles.field}>
+  <label className={styles.label}>Duration</label>
+  <select
+    value={form.duration_hours}
+    onChange={(e) =>
+      onUpdateField("duration_hours", Number(e.target.value) as 1 | 2 | 3)
+    }
+    className={styles.input}
+  >
+    <option value={1}>1 Hour</option>
+    <option value={2}>2 Hours</option>
+    <option value={3}>3 Hours</option>
+  </select>
+</div>
+
+<div className={styles.field}>
+  <label className={styles.label}>First Name</label>
+  <input
+    type="text"
+    value={form.first_name}
+    onChange={(e) => onUpdateField("first_name", e.target.value)}
+    className={styles.input}
+  />
+</div>
 
           <div className={styles.field}>
             <label className={styles.label}>Last Name</label>
