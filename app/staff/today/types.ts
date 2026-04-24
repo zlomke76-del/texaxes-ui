@@ -23,7 +23,13 @@ export type TaxExemptStatus = "pending_form" | "verified" | "unknown";
 
 export type TabType = "booking" | "walk_in" | "spectator" | "retail_only";
 export type TabStatus = "open" | "closed" | "void";
-export type ItemType = "booking" | "drink" | "snack" | "retail" | "axe" | "custom";
+export type ItemType =
+  | "booking"
+  | "drink"
+  | "snack"
+  | "retail"
+  | "axe"
+  | "custom";
 
 export type TabPaymentMethod =
   | "online_stripe"
@@ -48,6 +54,7 @@ export type BookingRow = {
   waiver_status: WaiverStatus;
   waiver_required?: number;
   waiver_signed?: number;
+  waiver_checked_in?: number;
   waiver_url: string;
   total_amount: number;
   amount_paid: number;
@@ -332,4 +339,42 @@ export type DerivedMetrics = {
   unpaidCount: number;
   taxExemptCount: number;
   taxFormsPending: number;
+};
+
+export type WaiverSearchResult = {
+  id: string;
+  customer_id: string | null;
+  booking_id: string | null;
+  customer_name: string;
+  email: string | null;
+  phone: string | null;
+  signed_at: string | null;
+  expires_at: string | null;
+  checked_in_at: string | null;
+  checked_in_by: string | null;
+  is_minor: boolean;
+  guardian_customer_id: string | null;
+  status: "signed" | "checked_in";
+};
+
+export type WaiverSearchResponse = {
+  success: boolean;
+  waivers: WaiverSearchResult[];
+};
+
+export type WaiverCheckInPayload = {
+  waiver_id: string;
+  booking_id?: string | null;
+  checked_in_by?: string | null;
+};
+
+export type WaiverCheckInResponse = {
+  success: boolean;
+  waiver: {
+    id: string;
+    customer_id: string | null;
+    booking_id: string | null;
+    checked_in_at: string | null;
+    checked_in_by: string | null;
+  };
 };
