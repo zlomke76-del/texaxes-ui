@@ -1,232 +1,627 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { checkInWaiver, searchWaivers } from "../today/lib/api";
-import type { WaiverSearchResult } from "../today/types";
+import { Suspense, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-function formatDateTime(value: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+const OPS_URL =
+  process.env.NEXT_PUBLIC_TEXAXES_OPS_URL ||
+  "https://texaxes-ops.vercel.app";
+
+function WaiverPageInner() {
+  const searchParams = useSearchParams();
+
+  const bookingId = searchParams.get("booking_id");
+  const customerId = searchParams.get("customer_id");
+
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  const [form, setForm] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    is_minor: false,
+    guardian_first_name: "",
+    guardian_last_name: "",
+    guardian_email: "",
+    guardian_phone: "",
   });
-}
 
-export default function StaffWaiversPage() {
-  const [query, setQuery] = useState("");
-  const [bookingId, setBookingId] = useState("");
-  const [checkedInBy, setCheckedInBy] = useState("");
-  const [waivers, setWaivers] = useState<WaiverSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [toast, setToast] = useState("");
+  const [ack, setAck] = useState({
+    read: false,
+    risk: false,
+    rules: false,
+    medical: false,
+    media: false,
+    guardian: false,
+  });
 
-  const readyToSearch = useMemo(
-    () => query.trim().length > 0 || bookingId.trim().length > 0,
-    [query, bookingId],
-  );
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function runSearch() {
-    if (!readyToSearch) {
-      setError("Enter a name, email, phone, or booking ID.");
+  const allChecked = useMemo(() => {
+    return (
+      ack.read &&
+      ack.risk &&
+      ack.rules &&
+      ack.medical &&
+      ack.media &&
+      (!form.is_minor || ack.guardian)
+    );
+  }, [ack, form.is_minor]);
+
+  function updateForm<K extends keyof typeof form>(
+    key: K,
+    value: (typeof form)[K]
+  ) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function getContext() {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    return canvas.getContext("2d");
+  }
+
+  function getPointFromEvent(e: MouseEvent | TouchEvent | any) {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    const source = e.touches ? e.touches[0] : e;
+
+    return {
+      x: source.clientX - rect.left,
+      y: source.clientY - rect.top,
+    };
+  }
+
+  function startDrawing(e: MouseEvent | TouchEvent | any) {
+    const ctx = getContext();
+    const point = getPointFromEvent(e);
+    if (!ctx || !point) return;
+
+    setIsDrawing(true);
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+  }
+
+  function draw(e: MouseEvent | TouchEvent | any) {
+    if (!isDrawing) return;
+
+    const ctx = getContext();
+    const point = getPointFromEvent(e);
+    if (!ctx || !point) return;
+
+    ctx.lineTo(point.x, point.y);
+    ctx.strokeStyle = "#111827";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+  }
+
+  function stopDrawing() {
+    setIsDrawing(false);
+  }
+
+  function clearSignature() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function signatureLooksEmpty() {
+    const canvas = canvasRef.current;
+    if (!canvas) return true;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return true;
+
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < pixels.length; i += 4) {
+      if (pixels[i] !== 0) return false;
+    }
+    return true;
+  }
+
+  function getSignatureData() {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    if (signatureLooksEmpty()) return null;
+    return canvas.toDataURL("image/png");
+  }
+
+  async function handleSubmit() {
+    setError(null);
+
+    if (!form.first_name.trim() || !form.last_name.trim()) {
+      setError("Participant first and last name are required.");
       return;
     }
 
-    try {
-      setLoading(true);
-      setError("");
-      setToast("");
+    if (!allChecked) {
+      setError(
+        "You must review and acknowledge all required terms before signing."
+      );
+      return;
+    }
 
-      const response = await searchWaivers({
-        q: query.trim() || undefined,
-        booking_id: bookingId.trim() || undefined,
-        limit: 30,
-      });
-
-      setWaivers(response.waivers || []);
-      if (!response.waivers?.length) {
-        setToast("No matching waivers found.");
+    if (form.is_minor) {
+      if (
+        !form.guardian_first_name.trim() ||
+        !form.guardian_last_name.trim()
+      ) {
+        setError("Guardian first and last name are required for minors.");
+        return;
       }
-    } catch (err: any) {
-      setError(err?.message || "Failed to search waivers");
-    } finally {
-      setLoading(false);
     }
-  }
 
-  async function handleCheckIn(waiver: WaiverSearchResult) {
+    const signature = getSignatureData();
+    if (!signature) {
+      setError("Signature required.");
+      return;
+    }
+
+    setSubmitting(true);
+
     try {
-      setBusyId(waiver.id);
-      setError("");
-      setToast("");
-
-      await checkInWaiver({
-        waiver_id: waiver.id,
-        booking_id: bookingId.trim() || waiver.booking_id || null,
-        checked_in_by: checkedInBy.trim() || null,
+      const res = await fetch(`${OPS_URL}/api/waivers/sign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          booking_id: bookingId || null,
+          customer_id: customerId || null,
+          customer: {
+            first_name: form.first_name.trim(),
+            last_name: form.last_name.trim(),
+            email: form.email.trim() || null,
+            phone: form.phone.trim() || null,
+          },
+          is_minor: form.is_minor,
+          guardian: form.is_minor
+            ? {
+                first_name: form.guardian_first_name.trim(),
+                last_name: form.guardian_last_name.trim(),
+                email: form.guardian_email.trim() || null,
+                phone: form.guardian_phone.trim() || null,
+              }
+            : null,
+          signature_data_url: signature,
+        }),
       });
 
-      setToast(`${waiver.customer_name} checked in.`);
-      await runSearch();
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || "Failed");
+      }
+
+      setSuccess(true);
     } catch (err: any) {
-      setError(err?.message || "Failed to check in waiver");
+      setError(err.message || "Submission failed");
     } finally {
-      setBusyId(null);
+      setSubmitting(false);
     }
   }
 
-  return (
-    <main className="page">
-      <section className="shell">
-        <div className="hero">
-          <div>
-            <div className="kicker">Tex Axes Staff</div>
-            <h1>Waiver Check-In</h1>
+  if (success) {
+    return (
+      <div className="container">
+        <div className="shell">
+          <div className="successCard">
+            <div className="eyebrow">Tex Axes</div>
+            <h1>Waiver Complete</h1>
             <p>
-              Search standalone or booking-linked waivers by name, email, phone,
-              or booking ID. Check a waiver in when the guest arrives and attach
-              it to the active booking when needed.
+              You’re all set. Your waiver has been recorded successfully.
+            </p>
+            <p className="successSubtext">
+              {bookingId
+                ? "Your waiver is now linked to your booking."
+                : "Show your name, email, or phone number at the front desk so staff can check you in."}
             </p>
           </div>
         </div>
 
-        <section className="card searchCard">
-          <label>
-            Guest search
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") runSearch();
-              }}
-              placeholder="Name, email, or phone"
-            />
-          </label>
+        <style jsx>{`
+          .container {
+            min-height: 100vh;
+            background:
+              radial-gradient(circle at top left, rgba(251, 146, 60, 0.08), transparent 28%),
+              linear-gradient(180deg, #06101f 0%, #081423 55%, #09111b 100%);
+            color: #f8fafc;
+            padding: 32px 16px;
+          }
+          .shell {
+            max-width: 760px;
+            margin: 0 auto;
+          }
+          .successCard {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 24px;
+            padding: 32px;
+            background: rgba(255, 255, 255, 0.06);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
+          }
+          .eyebrow {
+            display: inline-flex;
+            margin-bottom: 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(253, 186, 116, 0.24);
+            background: rgba(251, 146, 60, 0.12);
+            padding: 6px 12px;
+            color: #fdba74;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+          }
+          h1 {
+            margin: 0 0 12px;
+            font-size: clamp(2rem, 4vw, 3rem);
+            line-height: 1;
+          }
+          p {
+            margin: 0;
+            color: rgba(248, 250, 252, 0.75);
+            line-height: 1.7;
+          }
+          .successSubtext {
+            margin-top: 12px;
+          }
+        `}</style>
+      </div>
+    );
+  }
 
-          <label>
-            Booking ID / attach target
-            <input
-              value={bookingId}
-              onChange={(event) => setBookingId(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") runSearch();
-              }}
-              placeholder="Optional booking UUID"
-            />
-          </label>
+  return (
+    <div className="container">
+      <div className="shell">
+        <div className="heroCard">
+          <div className="eyebrow">Tex Axes</div>
+          <h1>Release of Liability & Waiver</h1>
+          <p className="heroText">
+            Please read this agreement carefully before signing. By signing, you
+            acknowledge that you understand its contents and are giving up certain
+            legal rights.
+          </p>
+        </div>
 
-          <label>
-            Checked in by
-            <input
-              value={checkedInBy}
-              onChange={(event) => setCheckedInBy(event.target.value)}
-              placeholder="Optional staff name or ID"
-            />
-          </label>
+        {error && <div className="error">{error}</div>}
+
+        <div className="card">
+          <div className="section">
+            <h3>Participant Information</h3>
+
+            <div className="grid">
+              <input
+                placeholder="First Name"
+                value={form.first_name}
+                onChange={(e) => updateForm("first_name", e.target.value)}
+              />
+
+              <input
+                placeholder="Last Name"
+                value={form.last_name}
+                onChange={(e) => updateForm("last_name", e.target.value)}
+              />
+
+              <input
+                placeholder="Email"
+                value={form.email}
+                onChange={(e) => updateForm("email", e.target.value)}
+              />
+
+              <input
+                placeholder="Phone"
+                value={form.phone}
+                onChange={(e) => updateForm("phone", e.target.value)}
+              />
+            </div>
+
+            <label className="minorToggle">
+              <input
+                type="checkbox"
+                checked={form.is_minor}
+                onChange={(e) => updateForm("is_minor", e.target.checked)}
+              />
+              <span>
+                Participant is a minor and requires parent/legal guardian consent
+              </span>
+            </label>
+          </div>
+
+          {form.is_minor && (
+            <div className="section">
+              <h3>Guardian Information</h3>
+
+              <div className="grid">
+                <input
+                  placeholder="Guardian First Name"
+                  value={form.guardian_first_name}
+                  onChange={(e) =>
+                    updateForm("guardian_first_name", e.target.value)
+                  }
+                />
+
+                <input
+                  placeholder="Guardian Last Name"
+                  value={form.guardian_last_name}
+                  onChange={(e) =>
+                    updateForm("guardian_last_name", e.target.value)
+                  }
+                />
+
+                <input
+                  placeholder="Guardian Email"
+                  value={form.guardian_email}
+                  onChange={(e) =>
+                    updateForm("guardian_email", e.target.value)
+                  }
+                />
+
+                <input
+                  placeholder="Guardian Phone"
+                  value={form.guardian_phone}
+                  onChange={(e) =>
+                    updateForm("guardian_phone", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="section">
+            <h3>Waiver Text</h3>
+
+            <div className="waiverBox">
+              <p>
+                This Release of Liability, Assumption of Risk, and Indemnity Agreement
+                applies to participation in any activity at or associated with Tex Axes,
+                including but not limited to axe throwing, knife throwing, training,
+                instruction, league play, competitions, demonstrations, special events,
+                private events, corporate events, spectator activities, and presence
+                anywhere on the premises or related areas.
+              </p>
+
+              <p>
+                I understand and acknowledge that these activities involve inherent and
+                obvious risks, including but not limited to serious personal injury,
+                permanent disability, death, property damage, emotional distress,
+                injuries caused by thrown objects, rebounding objects, falling objects,
+                broken equipment, collisions, slips, trips, falls, or the acts or
+                omissions of myself or others.
+              </p>
+
+              <p>
+                I knowingly and voluntarily assume all risks, both known and unknown,
+                arising from or related to participation in these activities, including
+                the risk of injury, death, or property damage.
+              </p>
+
+              <p>
+                I represent that I am physically and mentally capable of safely
+                participating, that I will comply with all rules, instructions, safety
+                requirements, and staff directions, and that I will stop participating
+                and notify staff immediately if I observe any unsafe condition or
+                experience any medical or physical issue.
+              </p>
+
+              <p>
+                To the fullest extent permitted by law, I release, waive, discharge, and
+                covenant not to sue Tex Axes Entertainment, LLC and its owners,
+                officers, members, managers, employees, contractors, agents,
+                representatives, affiliates, landlords, insurers, successors, assigns,
+                and any other persons or entities acting in any capacity on its behalf
+                from and against any and all claims, demands, causes of action, damages,
+                liabilities, losses, costs, or expenses of any kind arising out of or
+                related to participation in the activities or presence on the premises,
+                including claims arising from negligence, except to the extent caused by
+                gross negligence or willful misconduct where such limitation is
+                prohibited by law.
+              </p>
+
+              <p>
+                I agree to indemnify, defend, and hold harmless the Releasees from and
+                against any and all claims, liabilities, damages, losses, costs, and
+                expenses, including attorneys’ fees, arising out of or related to my
+                participation, my conduct on the premises, my violation of any rule,
+                instruction, or law, and any claim brought by a third party arising from
+                my actions or omissions.
+              </p>
+
+              <p>
+                I consent to emergency medical treatment if deemed necessary by Tex Axes
+                staff or emergency responders. I understand that Tex Axes has no
+                obligation to provide medical care and is not responsible for the cost of
+                any treatment, transport, or related services.
+              </p>
+
+              <p>
+                I understand that photographs, video, and audio recordings may be taken
+                during normal operations, events, promotions, or competitions. I grant
+                Tex Axes the right to photograph, record, use, reproduce, publish,
+                display, distribute, and otherwise use my name, likeness, image, voice,
+                and appearance in any media for lawful business purposes including
+                promotion, advertising, social media, website content, marketing, and
+                internal use, without compensation.
+              </p>
+
+              <p>
+                If I am signing on behalf of a minor participant, I certify that I am
+                the parent or legal guardian of that minor and have full authority to
+                sign this agreement on the minor’s behalf. I understand and agree that
+                the minor is bound by this agreement to the fullest extent permitted by
+                law and that I assume all risks and obligations on behalf of the minor.
+              </p>
+
+              <p>
+                This agreement shall be governed by the laws of the State of Texas, and
+                any dispute arising out of or relating to this agreement or the
+                activities shall be brought exclusively in a state or federal court of
+                competent jurisdiction located in Texas.
+              </p>
+
+              <p>
+                I have read this agreement carefully. I understand its terms. I
+                understand that by signing it, I am giving up substantial legal rights,
+                including the right to sue. I sign this agreement voluntarily and without
+                inducement.
+              </p>
+            </div>
+          </div>
+
+          <div className="section">
+            <h3>Acknowledgment</h3>
+
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={ack.read}
+                onChange={(e) => setAck({ ...ack, read: e.target.checked })}
+              />
+              <span>I have read and agree to this waiver.</span>
+            </label>
+
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={ack.risk}
+                onChange={(e) => setAck({ ...ack, risk: e.target.checked })}
+              />
+              <span>
+                I understand the risks involved, including serious injury or death.
+              </span>
+            </label>
+
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={ack.rules}
+                onChange={(e) => setAck({ ...ack, rules: e.target.checked })}
+              />
+              <span>I agree to follow all rules and staff instructions.</span>
+            </label>
+
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={ack.medical}
+                onChange={(e) => setAck({ ...ack, medical: e.target.checked })}
+              />
+              <span>I consent to emergency medical treatment if necessary.</span>
+            </label>
+
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={ack.media}
+                onChange={(e) => setAck({ ...ack, media: e.target.checked })}
+              />
+              <span>I consent to the photo/video release described above.</span>
+            </label>
+
+            {form.is_minor && (
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={ack.guardian}
+                  onChange={(e) =>
+                    setAck({ ...ack, guardian: e.target.checked })
+                  }
+                />
+                <span>
+                  I certify that I am the parent/legal guardian and agree on behalf of
+                  the minor participant.
+                </span>
+              </label>
+            )}
+          </div>
+
+          <div className="section">
+            <h3>Signature</h3>
+            <p className="signatureHelp">
+              Sign below using your finger or mouse. This signature is legally binding.
+            </p>
+
+            <div className="signatureWrap">
+              <canvas
+                ref={canvasRef}
+                width={700}
+                height={220}
+                className="signature"
+                onMouseDown={startDrawing}
+                onMouseMove={draw}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
+                onTouchStart={startDrawing}
+                onTouchMove={draw}
+                onTouchEnd={stopDrawing}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="clearButton"
+              onClick={clearSignature}
+            >
+              Clear Signature
+            </button>
+          </div>
 
           <button
             type="button"
-            onClick={runSearch}
-            disabled={loading || !readyToSearch}
+            className="submitButton"
+            onClick={handleSubmit}
+            disabled={submitting || !allChecked}
           >
-            {loading ? "Searching..." : "Find Waiver"}
+            {submitting ? "Submitting..." : "Sign Waiver"}
           </button>
-        </section>
-
-        {error ? <div className="error">{error}</div> : null}
-        {toast ? <div className="toast">{toast}</div> : null}
-
-        <section className="results">
-          {waivers.map((waiver) => {
-            const checkedIn = Boolean(waiver.checked_in_at);
-            const canAttach =
-              bookingId.trim() && waiver.booking_id !== bookingId.trim();
-
-            return (
-              <article className="waiverCard" key={waiver.id}>
-                <div className="waiverMain">
-                  <div>
-                    <div className="name">{waiver.customer_name}</div>
-                    <div className="details">
-                      {waiver.email || "No email"} ·{" "}
-                      {waiver.phone || "No phone"}
-                    </div>
-                    <div className="details">
-                      Signed {formatDateTime(waiver.signed_at)} · Expires{" "}
-                      {formatDateTime(waiver.expires_at)}
-                    </div>
-                    <div className="details">
-                      Booking: {waiver.booking_id || "Standalone"}
-                    </div>
-                  </div>
-
-                  <div className={checkedIn ? "chip good" : "chip pending"}>
-                    {checkedIn ? "Checked in" : "Signed"}
-                  </div>
-                </div>
-
-                <div className="actions">
-                  <button
-                    type="button"
-                    onClick={() => handleCheckIn(waiver)}
-                    disabled={busyId === waiver.id}
-                  >
-                    {busyId === waiver.id
-                      ? "Saving..."
-                      : checkedIn && !canAttach
-                        ? "Re-check In"
-                        : canAttach
-                          ? "Check In + Attach"
-                          : "Check In"}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </section>
-      </section>
+        </div>
+      </div>
 
       <style jsx>{`
-        .page {
+        .container {
           min-height: 100vh;
-          padding: 32px 16px 56px;
-          color: #f8fafc;
           background:
-            radial-gradient(
-              circle at top left,
-              rgba(251, 146, 60, 0.12),
-              transparent 28%
-            ),
+            radial-gradient(circle at top left, rgba(251, 146, 60, 0.08), transparent 28%),
             linear-gradient(180deg, #06101f 0%, #081423 55%, #09111b 100%);
+          color: #f8fafc;
+          padding: 24px 16px 48px;
         }
 
         .shell {
-          max-width: 1100px;
+          max-width: 860px;
           margin: 0 auto;
         }
 
-        .hero,
+        .heroCard,
         .card,
-        .waiverCard,
-        .error,
-        .toast {
+        .error {
           border: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 24px;
           background: rgba(255, 255, 255, 0.06);
           box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
         }
 
-        .hero {
+        .heroCard {
           padding: 28px;
-          margin-bottom: 18px;
+          margin-bottom: 20px;
+          background:
+            radial-gradient(circle at top left, rgba(251, 146, 60, 0.12), transparent 26%),
+            linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
         }
 
-        .kicker {
+        .card {
+          padding: 24px;
+        }
+
+        .eyebrow {
           display: inline-flex;
           margin-bottom: 12px;
           border-radius: 999px;
@@ -247,145 +642,210 @@ export default function StaffWaiversPage() {
           letter-spacing: -0.04em;
         }
 
-        p {
-          max-width: 780px;
+        h3 {
+          margin: 0 0 14px;
+          font-size: 1.1rem;
+          color: #fff;
+        }
+
+        .heroText {
           margin: 0;
           color: rgba(248, 250, 252, 0.74);
           line-height: 1.7;
         }
 
-        .searchCard {
-          display: grid;
-          gap: 12px;
-          padding: 18px;
-          margin-bottom: 18px;
+        .section {
+          margin-bottom: 24px;
         }
 
-        label {
+        .grid {
           display: grid;
-          gap: 7px;
-          color: rgba(248, 250, 252, 0.76);
-          font-size: 13px;
-          font-weight: 800;
+          gap: 12px;
+          grid-template-columns: 1fr;
         }
 
         input {
+          display: block;
           width: 100%;
-          box-sizing: border-box;
           padding: 12px 14px;
           border-radius: 14px;
           border: 1px solid rgba(255, 255, 255, 0.14);
           background: rgba(255, 255, 255, 0.08);
           color: #fff;
           outline: none;
+          box-sizing: border-box;
         }
 
         input::placeholder {
           color: rgba(248, 250, 252, 0.42);
         }
 
-        button {
+        input:focus {
+          border-color: rgba(251, 146, 60, 0.65);
+          box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.16);
+        }
+
+        .minorToggle,
+        .checkbox {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          color: rgba(248, 250, 252, 0.78);
+          line-height: 1.6;
+        }
+
+        .minorToggle {
+          margin-top: 14px;
+        }
+
+        .minorToggle input,
+        .checkbox input {
+          width: 16px;
+          height: 16px;
+          margin-top: 4px;
+          accent-color: #f97316;
+          flex: 0 0 auto;
+        }
+
+        .checkbox {
+          margin-bottom: 12px;
+        }
+
+        .waiverBox {
+          max-height: 320px;
+          overflow-y: auto;
+          padding: 18px;
+          border-radius: 18px;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: rgba(0, 0, 0, 0.18);
+          color: rgba(248, 250, 252, 0.78);
+          line-height: 1.75;
+          font-size: 14px;
+        }
+
+        .waiverBox p {
+          margin: 0 0 14px;
+        }
+
+        .waiverBox p:last-child {
+          margin-bottom: 0;
+        }
+
+        .signatureHelp {
+          margin: 0 0 10px;
+          color: rgba(248, 250, 252, 0.64);
+          line-height: 1.6;
+        }
+
+        .signatureWrap {
+          border-radius: 18px;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: #fff;
+          padding: 8px;
+          overflow: hidden;
+        }
+
+        .signature {
+          width: 100%;
+          height: auto;
+          display: block;
+          background: #ffffff;
+          touch-action: none;
+          border-radius: 12px;
+        }
+
+        .clearButton,
+        .submitButton {
           appearance: none;
           border: 0;
           cursor: pointer;
-          border-radius: 14px;
-          padding: 12px 14px;
-          background: #f97316;
-          color: #fff;
           font: inherit;
-          font-weight: 900;
           transition: 160ms ease;
         }
 
-        button:hover:enabled {
+        .clearButton {
+          width: 100%;
+          margin-top: 12px;
+          padding: 12px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.08);
+          color: #fff;
+          font-weight: 700;
+        }
+
+        .clearButton:hover {
+          background: rgba(255, 255, 255, 0.14);
+        }
+
+        .submitButton {
+          width: 100%;
+          padding: 14px 16px;
+          border-radius: 16px;
+          background: #f97316;
+          color: #fff;
+          font-weight: 800;
+          box-shadow: 0 16px 34px rgba(124, 45, 18, 0.28);
+        }
+
+        .submitButton:hover:enabled {
           background: #fb923c;
         }
 
-        button:disabled {
+        .submitButton:disabled {
           cursor: not-allowed;
           opacity: 0.55;
-        }
-
-        .error,
-        .toast {
-          margin-bottom: 18px;
-          padding: 14px 16px;
+          box-shadow: none;
         }
 
         .error {
+          margin-bottom: 20px;
+          padding: 16px 18px;
           color: #fecaca;
           background: rgba(239, 68, 68, 0.12);
           border-color: rgba(248, 113, 113, 0.24);
         }
 
-        .toast {
-          color: #bbf7d0;
-          background: rgba(34, 197, 94, 0.1);
-          border-color: rgba(74, 222, 128, 0.24);
-        }
-
-        .results {
-          display: grid;
-          gap: 14px;
-        }
-
-        .waiverCard {
-          padding: 18px;
-        }
-
-        .waiverMain {
-          display: grid;
-          gap: 14px;
-        }
-
-        .name {
-          font-size: 18px;
-          font-weight: 900;
-        }
-
-        .details {
-          margin-top: 5px;
-          color: rgba(248, 250, 252, 0.68);
-          line-height: 1.45;
-          word-break: break-word;
-        }
-
-        .chip {
-          width: fit-content;
-          border-radius: 999px;
-          padding: 7px 10px;
-          font-size: 12px;
-          font-weight: 900;
-        }
-
-        .chip.good {
-          color: #bbf7d0;
-          background: rgba(34, 197, 94, 0.14);
-        }
-
-        .chip.pending {
-          color: #fed7aa;
-          background: rgba(249, 115, 22, 0.14);
-        }
-
-        .actions {
-          margin-top: 16px;
-          display: flex;
-          justify-content: flex-end;
-        }
-
-        @media (min-width: 760px) {
-          .searchCard {
-            grid-template-columns: 1.3fr 1.1fr 0.9fr auto;
-            align-items: end;
+        @media (min-width: 720px) {
+          .container {
+            padding: 32px 20px 56px;
           }
 
-          .waiverMain {
-            grid-template-columns: 1fr auto;
-            align-items: start;
+          .heroCard,
+          .card {
+            padding: 28px;
+          }
+
+          .grid {
+            grid-template-columns: 1fr 1fr;
           }
         }
       `}</style>
-    </main>
+    </div>
+  );
+}
+
+function WaiverPageFallback() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        background:
+          "linear-gradient(180deg, #06101f 0%, #081423 55%, #09111b 100%)",
+        color: "#f8fafc",
+        padding: "24px",
+      }}
+    >
+      <div>Loading waiver...</div>
+    </div>
+  );
+}
+
+export default function WaiverPage() {
+  return (
+    <Suspense fallback={<WaiverPageFallback />}>
+      <WaiverPageInner />
+    </Suspense>
   );
 }
