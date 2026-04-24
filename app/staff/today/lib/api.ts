@@ -8,6 +8,9 @@ import type {
   TabDetailResponse,
   TabStatus,
   TodayResponse,
+  WaiverCheckInPayload,
+  WaiverCheckInResponse,
+  WaiverSearchResponse,
 } from "../types";
 
 async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -29,7 +32,7 @@ async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     throw new Error(
-      (json as { error?: string })?.error || `Request failed: ${res.status}`
+      (json as { error?: string })?.error || `Request failed: ${res.status}`,
     );
   }
 
@@ -38,15 +41,15 @@ async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getBookingsToday(date: string) {
   return opsFetch<TodayResponse>(
-    `/api/admin/bookings-today?date=${encodeURIComponent(date)}`
+    `/api/admin/bookings-today?date=${encodeURIComponent(date)}`,
   );
 }
 
 export function getAvailability(date: string, throwers: number) {
   return opsFetch<AvailabilityResponse>(
     `/availability?date=${encodeURIComponent(date)}&throwers=${encodeURIComponent(
-      String(throwers)
-    )}`
+      String(throwers),
+    )}`,
   );
 }
 
@@ -55,11 +58,14 @@ export function getOpenTabs(status: TabStatus = "open", search?: string) {
   if (search) params.set("search", search);
 
   return opsFetch<ListOpenTabsResponse>(
-    `/api/admin/list-open-tabs?${params.toString()}`
+    `/api/admin/list-open-tabs?${params.toString()}`,
   );
 }
 
-export function updateBooking(booking_id: string, updates: Record<string, unknown>) {
+export function updateBooking(
+  booking_id: string,
+  updates: Record<string, unknown>,
+) {
   return opsFetch("/api/admin/update-booking", {
     method: "POST",
     body: JSON.stringify({
@@ -85,7 +91,7 @@ export function createTab(payload: Record<string, unknown>) {
 
 export function getTab(tabId: string) {
   return opsFetch<TabDetailResponse>(
-    `/api/admin/get-tab?tab_id=${encodeURIComponent(tabId)}`
+    `/api/admin/get-tab?tab_id=${encodeURIComponent(tabId)}`,
   );
 }
 
@@ -119,6 +125,28 @@ export function voidLineItemRequest(payload: Record<string, unknown>) {
 
 export function voidPaymentRequest(payload: Record<string, unknown>) {
   return opsFetch("/api/admin/void-payment", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function searchWaivers(params: {
+  q?: string;
+  booking_id?: string;
+  limit?: number;
+}) {
+  const query = new URLSearchParams();
+  if (params.q) query.set("q", params.q);
+  if (params.booking_id) query.set("booking_id", params.booking_id);
+  if (params.limit) query.set("limit", String(params.limit));
+
+  return opsFetch<WaiverSearchResponse>(
+    `/api/admin/waivers/search?${query.toString()}`,
+  );
+}
+
+export function checkInWaiver(payload: WaiverCheckInPayload) {
+  return opsFetch<WaiverCheckInResponse>("/api/admin/waivers/check-in", {
     method: "POST",
     body: JSON.stringify(payload),
   });
