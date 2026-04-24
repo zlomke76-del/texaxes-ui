@@ -801,6 +801,10 @@ export default function StaffTodayPage() {
                   + New Booking
                 </button>
 
+                <a href="/staff/waivers" className={styles.primaryButton}>
+                  Waiver Check-In
+                </a>
+
                 <button
                   onClick={() => createStandaloneTab("walk_in")}
                   disabled={tabBusyId === "new-walk_in"}
