@@ -31,16 +31,16 @@ import {
   getLocalDateInputValue,
   shiftDate,
 } from "./lib/format";
-import { CreateingModal } from "./components/CreateingModal";
+import { CreateBookingModal } from "./components/CreateBookingModal";
 import { AddItemModal } from "./components/AddItemModal";
 import { PaymentModal } from "./components/PaymentModal";
 import { StatCard } from "./components/StatCard";
-import { ingRow } from "./components/ingRow";
+import { BookingRow } from "./components/BookingRow";
 import { OpenTabsSnapshot } from "./components/OpenTabsSnapshot";
 import type {
   AddItemFormState,
-  ingRow as ingRowType,
-  CreateingPayload,
+  BookingRow as BookingRowType,
+  CreateBookingPayload,
   CreateFormState,
   FilterKey,
   ListOpenTabsResponse,
@@ -68,7 +68,7 @@ export default function StaffTodayPage() {
   const [availability, setAvailability] = useState<any[]>([]);
 
   const [tabBusyId, setTabBusyId] = useState<string | null>(null);
-  const [tabDetailsBying, setTabDetailsBying] = useState<
+  const [tabDetailsByBooking, setTabDetailsByBooking] = useState<
     Record<string, TabDetailResponse | null>
   >({});
   const [openTabsSummary, setOpenTabsSummary] = useState<ListOpenTabsResponse | null>(null);
@@ -100,10 +100,10 @@ export default function StaffTodayPage() {
     try {
       setLoading(true);
       setError("");
-      const json = await getingsToday(date);
+      const json = await getBookingsToday(date);
       setData(json);
     } catch (err: any) {
-      setError(err?.message || "Failed to load ings");
+      setError(err?.message || "Failed to load bookings");
     } finally {
       setLoading(false);
     }
@@ -171,47 +171,47 @@ export default function StaffTodayPage() {
 
   const derived = useMemo(() => deriveMetrics(data), [data]);
 
-  const filteredings = useMemo(() => {
-    const rows = [...(data?.ings || [])].sort((a, b) => {
+  const filteredBookings = useMemo(() => {
+    const rows = [...(data?.bookings || [])].sort((a, b) => {
       const priorityDiff = getPriorityScore(a) - getPriorityScore(b);
       if (priorityDiff !== 0) return priorityDiff;
       return a.start_time.localeCompare(b.start_time);
     });
 
     if (filter === "all") return rows;
-    if (filter === "attention") return rows.filter(isAttentioning);
+    if (filter === "attention") return rows.filter(isAttentionBooking);
     if (filter === "unpaid") {
       return rows.filter(
-        (row) => row.payment_status !== "paid" && row.ing_status !== "completed"
+        (row) => row.payment_status !== "paid" && row.booking_status !== "completed"
       );
     }
     if (filter === "checked_in") {
-      return rows.filter((row) => row.ing_status === "checked_in");
+      return rows.filter((row) => row.booking_status === "checked_in");
     }
     if (filter === "completed") {
-      return rows.filter((row) => row.ing_status === "completed");
+      return rows.filter((row) => row.booking_status === "completed");
     }
     if (filter === "no_show") {
-      return rows.filter((row) => row.ing_status === "no_show");
+      return rows.filter((row) => row.booking_status === "no_show");
     }
     if (filter === "tax_exempt") {
       return rows.filter((row) => !!row.tax_exempt);
     }
     if (filter === "upcoming") {
       return rows.filter((row) =>
-        ["pending", "awaiting_payment", "confirmed", "paid"].includes(row.ing_status)
+        ["pending", "awaiting_payment", "confirmed", "paid"].includes(row.booking_status)
       );
     }
 
     return rows;
   }, [data, filter]);
 
-  async function applyUpdate(ingId: string, updates: Record<string, unknown>) {
+  async function applyUpdate(bookingId: string, updates: Record<string, unknown>) {
     try {
-      setBusyId(ingId);
-      await updateing(ingId, updates);
+      setBusyId(bookingId);
+      await updateBooking(bookingId, updates);
       await loadBoard(selectedDate);
-      setToast("ing updated");
+      setToast("Booking updated");
     } catch (err: any) {
       alert(err?.message || "Update failed");
     } finally {
@@ -219,16 +219,16 @@ export default function StaffTodayPage() {
     }
   }
 
-  async function handleEditNotes(row: ingRowType) {
+  async function handleEditNotes(row: BookingRowType) {
     const next = window.prompt(
       "Update internal notes",
       row.internal_notes || row.customer_notes || ""
     );
     if (next === null) return;
-    await applyUpdate(row.ing_id, { internal_notes: next });
+    await applyUpdate(row.booking_id, { internal_notes: next });
   }
 
-  async function handleEditPartySize(row: ingRowType) {
+  async function handleEditPartySize(row: BookingRowType) {
     const next = window.prompt("Update party size", String(row.party_size || 1));
     if (next === null) return;
 
@@ -238,10 +238,10 @@ export default function StaffTodayPage() {
       return;
     }
 
-    await applyUpdate(row.ing_id, { party_size: size });
+    await applyUpdate(row.booking_id, { party_size: size });
   }
 
-  async function handleCopyWaiverLink(row: ingRowType) {
+  async function handleCopyWaiverLink(row: BookingRowType) {
     try {
       await navigator.clipboard.writeText(row.waiver_url);
       setToast("Waiver link copied");
@@ -250,19 +250,19 @@ export default function StaffTodayPage() {
     }
   }
 
-  async function handleMarkTaxFormCollected(row: ingRowType) {
+  async function handleMarkTaxFormCollected(row: BookingRowType) {
     const currentNotes = row.internal_notes?.trim() || "";
     const collectLine = "Collect tax exempt form.";
     const verifiedLine = "Tax exempt form collected.";
     const nextNotes = currentNotes.replace(collectLine, verifiedLine).trim();
 
-    await applyUpdate(row.ing_id, {
+    await applyUpdate(row.booking_id, {
       tax_exempt_status: "verified",
       internal_notes: nextNotes,
     });
   }
 
-  function handleOpenWaiver(row: ingRowType) {
+  function handleOpenWaiver(row: BookingRowType) {
     window.open(row.waiver_url, "_blank", "noopener,noreferrer");
   }
 
@@ -299,18 +299,18 @@ export default function StaffTodayPage() {
     });
   }
 
-  async function submitCreateing(payment_status: "pending" | "paid") {
+  async function submitCreateBooking(payment_status: "pending" | "paid") {
     try {
       setCreateBusy(true);
       setCreateError("");
 
       if (!selectedDate) {
-        setCreateError("Select a date before creating the ing.");
+        setCreateError("Select a date before creating the booking.");
         return;
       }
 
       if (!createForm.time) {
-        setCreateError("Select a time slot before creating the ing.");
+        setCreateError("Select a time slot before creating the booking.");
         return;
       }
 
@@ -324,7 +324,7 @@ export default function StaffTodayPage() {
         return;
       }
 
-      const payload: CreateingPayload = {
+      const payload: CreateBookingPayload = {
             date: selectedDate,
   time: createForm.time,
   throwers: Number(createForm.throwers),
@@ -335,8 +335,8 @@ export default function StaffTodayPage() {
           email: createForm.email || null,
           phone: createForm.phone || null,
         },
-        ing_source: createForm.ing_source,
-        ing_type: createForm.ing_type,
+        booking_source: createForm.booking_source,
+        booking_type: createForm.booking_type,
         customer_notes: createForm.customer_notes || "",
         internal_notes: buildTaxInternalNotes(createForm),
         payment_status,
@@ -349,34 +349,34 @@ export default function StaffTodayPage() {
           : null,
       };
 
-      const created = await createing(payload);
+      const created = await createBooking(payload);
 
       setShowCreateModal(false);
       setCreateForm(defaultCreateForm());
       await loadBoard(selectedDate);
 
       if (created.waiver_email_sent) {
-        setToast("ing created and waiver emailed");
+        setToast("Booking created and waiver emailed");
       } else if (created.waiver_url) {
-        setToast("ing created. Open or copy the waiver link.");
+        setToast("Booking created. Open or copy the waiver link.");
       } else {
-        setToast("ing created");
+        setToast("Booking created");
       }
     } catch (err: any) {
-      setCreateError(err?.message || "Failed to create ing");
+      setCreateError(err?.message || "Failed to create booking");
     } finally {
       setCreateBusy(false);
     }
   }
 
-  async function findOpenTabForing(ingId: string) {
-    const response = await getOpenTabs("open", ingId);
-    return response.tabs.find((tab) => tab.ing_id === ingId) || null;
+  async function findOpenTabForBooking(bookingId: string) {
+    const response = await getOpenTabs("open", bookingId);
+    return response.tabs.find((tab) => tab.booking_id === bookingId) || null;
   }
 
-  async function loadTab(tabId: string, ingIdForStore?: string) {
+  async function loadTab(tabId: string, bookingIdForStore?: string) {
     const detail = await getTab(tabId);
-    const ingKey = ingIdForStore || detail.tab.ing_id || detail.tab.id;
+    const bookingKey = bookingIdForStore || detail.tab.booking_id || detail.tab.id;
 
     setTabDetailsByBooking((prev) => ({
       ...prev,
@@ -739,24 +739,7 @@ export default function StaffTodayPage() {
       </div>
     </div>
 
-    <section className={styles.hero}>
-  <div className={styles.heroContent}>
-    ...
-  </div>
 
-  <a
-    href="https://www.texaxes.com"
-    target="_blank"
-    rel="noopener noreferrer"
-    className={styles.logoWrap}
-  >
-    <img
-      src="/images/image_logo_tex_axes.png"
-      alt="Tex Axes"
-      className={styles.logo}
-    />
-  </a>
-</section>
  
     <div className={styles.heroActions}>
                 <button
@@ -801,7 +784,7 @@ export default function StaffTodayPage() {
                   + New Booking
                 </button>
 
-                <a href="/staff/waivers" className={styles.primaryButton}>
+                <a href="/staff/waivers" className={styles.secondaryButton}>
                   Waiver Check-In
                 </a>
 
